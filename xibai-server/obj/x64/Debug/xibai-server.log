@@ -1,0 +1,15 @@
+﻿  正在验证源
+  正在将源远程复制到“code.xibai.xyz”
+  正在验证体系结构
+  正在验证体系结构
+  正在启动远程生成
+  正在编译源:
+  main.cpp
+E:\study\code\c++\socket-study\xibai-vpn\xibai-server\main.cpp(24,13): warning : ISO C++ forbids converting a string constant to ‘char*’ [-Wwrite-strings]
+E:\study\code\c++\socket-study\xibai-vpn\xibai-server\main.cpp(24,13): warning :    24 |         log("socket create error\n");
+E:\study\code\c++\socket-study\xibai-vpn\xibai-server\main.cpp(24,13): warning :       |             ^~~~~~~~~~~~~~~~~~~~~~~
+E:\study\code\c++\socket-study\xibai-vpn\xibai-server\main.cpp(26,17): warning : variable ‘RecvAddr’ set but not used [-Wunused-but-set-variable]
+E:\study\code\c++\socket-study\xibai-vpn\xibai-server\main.cpp(26,17): warning :    26 |     sockaddr_in RecvAddr;
+E:\study\code\c++\socket-study\xibai-vpn\xibai-server\main.cpp(26,17): warning :       |                 ^~~~~~~~
+  正在链接对象
+  xibai-server.vcxproj -> E:\study\code\c++\socket-study\xibai-vpn\xibai-server\bin\x64\Debug\xibai-server.out
