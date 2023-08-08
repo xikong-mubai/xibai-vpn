@@ -1,6 +1,7 @@
 #pragma once
 
-#include <cstdio>
+#include <stdio.h>
+#include <stdlib.h>
 #include <signal.h>
 #include <unistd.h>
 
@@ -12,6 +13,11 @@
 
 #include <sys/time.h>
 #include <time.h>
+
+
+//最多允许的客户端数量
+#define NUM 100
+
 
 // 消息日志
 int log(char* message) {
@@ -66,3 +72,22 @@ in_addr_t getIP()
     freeifaddrs(ifList);
     return 0;
 }
+
+struct xibai_data
+{
+    in_addr addr;
+    ushort port;
+    int len;
+    uint8_t data[65526];
+};
+
+struct xibai_ready
+{
+    in_addr addr;
+    ushort port;
+    char flag;
+};
+
+
+struct xibai_ready target_list[NUM] = { 0 };
+int currentNum = 0;      //当前客户端数量

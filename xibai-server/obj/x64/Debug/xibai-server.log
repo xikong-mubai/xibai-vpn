@@ -5,11 +5,38 @@
   正在启动远程生成
   正在编译源:
   main.cpp
+E:\study\code\c++\socket-study\xibai-vpn\xibai-server\main.h(47,13): warning : ISO C++ forbids converting a string constant to ‘char*’ [-Wwrite-strings]
+E:\study\code\c++\socket-study\xibai-vpn\xibai-server\main.h(47,13): warning :    47 |         log("��ȡ������Ϣʧ��\n");
+E:\study\code\c++\socket-study\xibai-vpn\xibai-server\main.h(47,13): warning :       |             ^~~~~~~~~~~~~~~~~
+E:\study\code\c++\socket-study\xibai-vpn\xibai-server\main.h(55,31): warning : comparison with string literal results in unspecified behavior [-Waddress]
+E:\study\code\c++\socket-study\xibai-vpn\xibai-server\main.h(55,31): warning :    55 |             if (ifa->ifa_name == "eth0" || ifa->ifa_name == "ens32")
+E:\study\code\c++\socket-study\xibai-vpn\xibai-server\main.h(55,31): warning :       |                 ~~~~~~~~~~~~~~^~~~~~~~~
+E:\study\code\c++\socket-study\xibai-vpn\xibai-server\main.h(55,58): warning : comparison with string literal results in unspecified behavior [-Waddress]
+E:\study\code\c++\socket-study\xibai-vpn\xibai-server\main.h(55,58): warning :    55 |             if (ifa->ifa_name == "eth0" || ifa->ifa_name == "ens32")
+E:\study\code\c++\socket-study\xibai-vpn\xibai-server\main.h(55,58): warning :       |                                            ~~~~~~~~~~~~~~^~~~~~~~~~
 E:\study\code\c++\socket-study\xibai-vpn\xibai-server\main.cpp(24,13): warning : ISO C++ forbids converting a string constant to ‘char*’ [-Wwrite-strings]
 E:\study\code\c++\socket-study\xibai-vpn\xibai-server\main.cpp(24,13): warning :    24 |         log("socket create error\n");
 E:\study\code\c++\socket-study\xibai-vpn\xibai-server\main.cpp(24,13): warning :       |             ^~~~~~~~~~~~~~~~~~~~~~~
-E:\study\code\c++\socket-study\xibai-vpn\xibai-server\main.cpp(26,17): warning : variable ‘RecvAddr’ set but not used [-Wunused-but-set-variable]
-E:\study\code\c++\socket-study\xibai-vpn\xibai-server\main.cpp(26,17): warning :    26 |     sockaddr_in RecvAddr;
-E:\study\code\c++\socket-study\xibai-vpn\xibai-server\main.cpp(26,17): warning :       |                 ^~~~~~~~
+E:\study\code\c++\socket-study\xibai-vpn\xibai-server\main.cpp(37,13): warning : ISO C++ forbids converting a string constant to ‘char*’ [-Wwrite-strings]
+E:\study\code\c++\socket-study\xibai-vpn\xibai-server\main.cpp(37,13): warning :    37 |         log("socket bind error\n");
+E:\study\code\c++\socket-study\xibai-vpn\xibai-server\main.cpp(37,13): warning :       |             ^~~~~~~~~~~~~~~~~~~~~
+E:\study\code\c++\socket-study\xibai-vpn\xibai-server\main.cpp(48,50): warning : passing NULL to non-pointer argument 4 of ‘ssize_t recvfrom(int, void*, size_t, int, sockaddr*, socklen_t*)’ [-Wconversion-null]
+E:\study\code\c++\socket-study\xibai-vpn\xibai-server\main.cpp(48,50): warning :    48 |         len = recvfrom(server_fd, buff, 0x10000, NULL, (sockaddr*)&target_addr, (socklen_t*)&ta_len);
+E:\study\code\c++\socket-study\xibai-vpn\xibai-server\main.cpp(48,50): warning :       |                                                  ^~~~
+/usr/include/x86_64-linux-gnu/sys/socket.h(164,30): message : declared here
+/usr/include/x86_64-linux-gnu/sys/socket.h(164,30): message :   164 |                          int __flags, __SOCKADDR_ARG __addr,
+/usr/include/x86_64-linux-gnu/sys/socket.h(164,30): message :       |                          ~~~~^~~~~~~
+E:\study\code\c++\socket-study\xibai-vpn\xibai-server\main.cpp(48,23): warning : conversion from ‘ssize_t’ {aka ‘long int’} to ‘int’ may change value [-Wconversion]
+E:\study\code\c++\socket-study\xibai-vpn\xibai-server\main.cpp(48,23): warning :    48 |         len = recvfrom(server_fd, buff, 0x10000, NULL, (sockaddr*)&target_addr, (socklen_t*)&ta_len);
+E:\study\code\c++\socket-study\xibai-vpn\xibai-server\main.cpp(48,23): warning :       |               ~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+E:\study\code\c++\socket-study\xibai-vpn\xibai-server\main.cpp(50,17): warning : ISO C++ forbids converting a string constant to ‘char*’ [-Wwrite-strings]
+E:\study\code\c++\socket-study\xibai-vpn\xibai-server\main.cpp(50,17): warning :    50 |             log("recvfrom error\n");
+E:\study\code\c++\socket-study\xibai-vpn\xibai-server\main.cpp(50,17): warning :       |                 ^~~~~~~~~~~~~~~~~~
+E:\study\code\c++\socket-study\xibai-vpn\xibai-server\main.cpp(55,41): warning : passing NULL to non-pointer argument 4 of ‘ssize_t sendto(int, const void*, size_t, int, const sockaddr*, socklen_t)’ [-Wconversion-null]
+E:\study\code\c++\socket-study\xibai-vpn\xibai-server\main.cpp(55,41): warning :    55 |             sendto(server_fd, buff, 13, NULL, (sockaddr*)&target_addr, (socklen_t)ta_len);
+E:\study\code\c++\socket-study\xibai-vpn\xibai-server\main.cpp(55,41): warning :       |                                         ^~~~
+/usr/include/x86_64-linux-gnu/sys/socket.h(153,28): message : declared here
+/usr/include/x86_64-linux-gnu/sys/socket.h(153,28): message :   153 |                        int __flags, __CONST_SOCKADDR_ARG __addr,
+/usr/include/x86_64-linux-gnu/sys/socket.h(153,28): message :       |                        ~~~~^~~~~~~
   正在链接对象
   xibai-server.vcxproj -> E:\study\code\c++\socket-study\xibai-vpn\xibai-server\bin\x64\Debug\xibai-server.out
