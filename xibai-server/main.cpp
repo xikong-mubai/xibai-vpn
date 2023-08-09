@@ -1,16 +1,23 @@
 ﻿#include "main.h"
 
-int heart(int server_fd,sockaddr_in target_addr) {
+int heart(int server_fd,sockaddr_in target_addr,int num) {
     int flag = fork();
+    char *message = "0\n";
+    message[0] = '0' + num;
     switch (flag)
     {
     case -1:
         return -1;
         break;
     case 0:                 // 子进程
+        if (num > NUM)
+        {
+            sendto(server_fd, "client's number is max!\n", 5, NULL, (sockaddr*)&target_addr, (socklen_t)sizeof(target_addr));
+            return 0;
+        }
         while (true)
         {
-            sendto(server_fd, "test\n", 5, NULL, (sockaddr*)&target_addr, (socklen_t)sizeof(target_addr));
+            sendto(server_fd, message, 2, NULL, (sockaddr*)&target_addr, (socklen_t)sizeof(target_addr));
             sleep(1);
         }
         break;
@@ -43,7 +50,7 @@ int main()
     }
     printf("socket already binded\n");
 
-    char* buff = (char*)malloc(0x10000);
+    xibai_data *buff = (xibai_data*)malloc(0x10000);
     int len = 0;
 
     sockaddr_in target_addr = { 0 };
@@ -51,13 +58,46 @@ int main()
     while (1) {
         len = recvfrom(server_fd, buff, 0x10000, NULL, (sockaddr*)&target_addr, (socklen_t*)&ta_len);
         if (len == -1) {
+            printf("recvfrom error\n");
             log("recvfrom error\n");
-            
         }
-        else if (len < 0x10000) {
-            if (target_list[buff[3]])
+        else if (len < 0x10000 && len > 0) {
+            switch (buff->flag)
             {
+            case 0:         //  heart
+                break;
+            case 1:         //  init
+                currentNum++;
+                fork_pid[currentNum] = heart(server_fd, target_addr, currentNum);
+                if (fork_pid[currentNum])
+                {
+                    target_list[currentNum].real_target = target_addr;
+                    target_list[currentNum].realt_len = ta_len;
+                    target_list[currentNum].flag = 1;
+                }
+                break;
+            case 2:
+                udp_len = ((xibai_data*)buff)->len;
+                if (udp_len > len) {
+                    char* message = (char*)malloc(1024);
+                    sprintf(message, "client udp length is exception ( %d ) !!! maybe is error!!!\n", len);
+                    printf(message);
+                    log(message);
+                }
+                else {
+                    len = sendto(server_fd, buff, len, NULL, (sockaddr*)&(target_list[((char*)buff)[9]].real_target), target_list[((char*)buff)[9]].realt_len);
+                    if (len == -1)
+                    {
+                        printf("send error: %s\n", inet_ntoa(buff->dst_target.addr));
+                        log("send error\n");
+                    }
+                }
 
+                break;
+            case 3:
+                break;
+            default:
+                break;
             }
             //printf("%s => %s\n", inet_ntoa(target_addr.sin_addr), buff);
             /*
@@ -69,9 +109,12 @@ int main()
         }
         else
         {
-            printf("udp length is max!!! maybe is error!!!\n");
-            log("udp length is max!!! maybe is error!!!\n");
+            char* message = (char*)malloc(1024);
+            sprintf(message, "vpn udp length is exception ( %d ) !!! maybe is error!!!\n", len);
+            printf(message);
+            log(message);
         }
+        bzero(buff, 0x10000);
     }
 
     close(server_fd);

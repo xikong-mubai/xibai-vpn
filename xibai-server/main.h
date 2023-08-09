@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdio.h>
+#include <string.h>
 #include <stdlib.h>
 #include <signal.h>
 #include <unistd.h>
@@ -31,8 +32,8 @@ int log(char* message) {
     return 0;
 }
 
-// 每个客户端连接又一个新的子进程处理，对应的连接编号为 count
-int server(int count);
+// 每个客户端连接由一个新的子进程维持，对应的连接编号为 num
+int heart(int server_fd, sockaddr_in target_addr, int num);
 
 // 获取网卡ip
 in_addr_t getIP()
@@ -73,21 +74,35 @@ in_addr_t getIP()
     return 0;
 }
 
-struct xibai_data
+
+// flag = 0  , heart data
+// flag = 1  , init
+// flag = 2  , data
+// flag = 3  , 
+// flag = 4  , no target and wait init
+struct xibai_target
 {
     in_addr addr;
     ushort port;
+};
+
+struct xibai_data
+{
+    xibai_target src_target;
+    xibai_target dst_target;
+    char flag;
     int len;
-    uint8_t data[65526];
+    uint8_t data[65519];
 };
 
 struct xibai_ready
 {
-    in_addr addr;
-    ushort port;
+    sockaddr_in real_target;
+    socklen_t realt_len;
     char flag;
 };
 
-
+int udp_len = 0;
 struct xibai_ready target_list[NUM] = { 0 };
-int currentNum = 0;      //当前客户端数量
+int fork_pid[NUM] = { 0 };
+int currentNum = 1;      //当前ip数量
