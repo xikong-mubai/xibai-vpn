@@ -127,7 +127,12 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="test.cpp" />
     <ClCompile Include="xibai-vpn.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="wintest.h" />
+    <ClInclude Include="wintun.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

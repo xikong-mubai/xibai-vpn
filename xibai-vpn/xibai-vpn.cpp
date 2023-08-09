@@ -1,18 +1,15 @@
 ﻿// xibai-vpn.cpp : 此文件包含 "main" 函数。程序执行将在此处开始并结束。
 //
 
-#include <iostream>
-#include <winsock2.h>
 #include <Ws2tcpip.h>
 #include <stdio.h>
+#include "wintun.h"
 
 // Link with ws2_32.lib
 #pragma comment(lib, "Ws2_32.lib")
 
-
 #define DEFAULT_IP (char*)"127.0.0.1"
 #define MAX_PATH 260
-
 
 // 获得本机的IP地址
 char* GetLocalIP()
@@ -36,7 +33,7 @@ char* GetLocalIP()
 	return inet_ntoa(inAddr);
 }
 
-int main() {
+int tttmain() {
 
 	int iResult;
 	WSADATA wsaData;
@@ -58,7 +55,7 @@ int main() {
 
 	const char* buf = "Hello World!\n";
 
-	hostent *hostinfo = gethostbyname("code.xibai.xyz");
+	hostent *hostinfo = gethostbyname("HostName");
 	unsigned long *serverip = (unsigned long *)(hostinfo->h_addr_list[0]);
 
 	sockaddr_in RecvAddr;

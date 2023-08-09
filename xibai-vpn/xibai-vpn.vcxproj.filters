@@ -18,5 +18,16 @@
     <ClCompile Include="xibai-vpn.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="test.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="wintun.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="wintest.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
