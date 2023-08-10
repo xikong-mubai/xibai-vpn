@@ -17,6 +17,7 @@
 #include <locale.h>
 #include "wintun.h"
 
+#pragma comment (lib, "Ws2_32.lib")
 #pragma comment(lib, "ntdll.lib")
 #pragma comment(lib, "Iphlpapi.lib")
 
@@ -309,7 +310,7 @@ SendPackets(_Inout_ DWORD_PTR SessionPtr)
     return ERROR_SUCCESS;
 }
 
-int __cdecl main(void)
+int __cdecl main(int argc, char** argv)
 {
     setlocale(LC_ALL, "zh_CN.UTF-8");
     HMODULE Wintun = InitializeWintun();
@@ -353,9 +354,23 @@ int __cdecl main(void)
     DWORD Version = WintunGetRunningDriverVersion();
     Log(WINTUN_LOG_INFO, L"Wintun v%u.%u loaded", (Version >> 16) & 0xff, (Version >> 0) & 0xff);
 
-    PCSTR hostname = "code.xibai.xyz",servceport = "60001";
+    int iResult;
+    WSADATA wsaData;
+    // Initialize Winsock
+    iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
+    if (iResult != NO_ERROR) {
+        wprintf(L"WSAStartup failed with error: %d\n", iResult);
+        return 1;
+    }
+    struct addrinfo hints;
+    DWORD dwRetval;
+    ZeroMemory(&hints, sizeof(hints));
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_DGRAM;
+    hints.ai_protocol = IPPROTO_UDP;
     addrinfo *server_addrinfo = NULL;
-    if (getaddrinfo(hostname,servceport,NULL,&server_addrinfo))
+    dwRetval = getaddrinfo(argv[1], argv[2], &hints, &server_addrinfo);
+    if (dwRetval)
     {
         WintunCloseAdapter(Adapter);
         //    cleanupQuit:
@@ -363,14 +378,49 @@ int __cdecl main(void)
         CloseHandle(QuitEvent);
         //    cleanupWintun:
         FreeLibrary(Wintun);
-        return LogError(L"Failed to eval hostname", GetLastError());
+        return LogError(L"getaddrinfo failed with error: %d\n", dwRetval);
     }
+    sockaddr_in* sockaddr_ipv4 = (sockaddr_in*)(server_addrinfo->ai_addr);
+    char* tmp_ip = inet_ntoa(sockaddr_ipv4->sin_addr); wchar_t* server_ip;
+    int convertResult = MultiByteToWideChar(CP_UTF8, 0, tmp_ip, (int)strlen(tmp_ip), NULL, 0);
+    if (convertResult <= 0)
+    {
+        WintunCloseAdapter(Adapter);
+        //    cleanupQuit:
+        SetConsoleCtrlHandler(CtrlHandler, FALSE);
+        CloseHandle(QuitEvent);
+        //    cleanupWintun:
+        FreeLibrary(Wintun);
+        return LogError(L"Exception occurred: Failure to convert its message text using MultiByteToWideChar\n", GetLastError());
+    }
+    else
+    {
+        server_ip = (wchar_t*)malloc(convertResult + 10);
+        convertResult = MultiByteToWideChar(CP_UTF8, 0, tmp_ip, (int)strlen(tmp_ip), server_ip, convertResult);
+        if (convertResult <= 0)
+        {
+            WintunCloseAdapter(Adapter);
+            //    cleanupQuit:
+            SetConsoleCtrlHandler(CtrlHandler, FALSE);
+            CloseHandle(QuitEvent);
+            //    cleanupWintun:
+            FreeLibrary(Wintun);
+            return LogError(L"Exception occurred: Failure to convert its message text using MultiByteToWideChar\n", GetLastError());
+        }
+    }
+    Log(WINTUN_LOG_INFO, L"resolve server ip: %s", server_ip);
+
+    //tmp_ip[0] = sockaddr_ipv4->sin_addr.S_un.S_addr;
+
+
+
 
     MIB_UNICASTIPADDRESS_ROW AddressRow;
     InitializeUnicastIpAddressEntry(&AddressRow);
     WintunGetAdapterLUID(Adapter, &AddressRow.InterfaceLuid);
     AddressRow.Address.Ipv4.sin_family = AF_INET;
-    AddressRow.Address.Ipv4.sin_addr.S_un.S_addr = htonl((10 << 24) | (6 << 16) | (7 << 8) | (7 << 0)); /* 10.6.7.7 */
+    //AddressRow.Address.Ipv4.sin_addr.S_un.S_addr = htonl((10 << 24) | (6 << 16) | (7 << 8) | (7 << 0)); /* 10.6.7.7 */
+    AddressRow.Address.Ipv4.sin_addr.S_un.S_addr = sockaddr_ipv4->sin_addr.S_un.S_addr; /* 10.6.7.7 */
     AddressRow.OnLinkPrefixLength = 24; /* This is a /24 network */
     AddressRow.DadState = IpDadStatePreferred;
     LastError = CreateUnicastIpAddressEntry(&AddressRow);
