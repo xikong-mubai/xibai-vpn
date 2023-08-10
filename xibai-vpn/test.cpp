@@ -7,12 +7,14 @@
 #include <Windows.h>
 #include <ws2ipdef.h>
 #include <iphlpapi.h>
+#include <WS2tcpip.h>
 #include <mstcpip.h>
 #include <ip2string.h>
 #include <winternl.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <locale.h>
 #include "wintun.h"
 
 #pragma comment(lib, "ntdll.lib")
@@ -78,7 +80,7 @@ ConsoleLogger(_In_ WINTUN_LOGGER_LEVEL Level, _In_ DWORD64 Timestamp, _In_z_ con
     }
     fwprintf(
         stderr,
-        L"%04u-%02u-%02u %02u:%02u:%02u.%04u [%c] %s\n",
+        L"%04u-%02u-%02u %02u:%02u:%02u.%04u [%c] %ls\n",
         SystemTime.wYear,
         SystemTime.wMonth,
         SystemTime.wDay,
@@ -110,7 +112,6 @@ static DWORD
 LogError(_In_z_ const WCHAR* Prefix, _In_ DWORD Error)
 {
     LPTSTR SystemMessage = NULL,  FormattedMessage = NULL;
-    DWORD_PTR pArgs[] = { (DWORD_PTR)Prefix, (DWORD_PTR)Error, (DWORD_PTR)SystemMessage };
     if (!FormatMessageW(
         FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_ALLOCATE_BUFFER,
         NULL,
@@ -119,17 +120,19 @@ LogError(_In_z_ const WCHAR* Prefix, _In_ DWORD Error)
         (LPTSTR)&SystemMessage,
         1024,
         NULL)) {
-        printf("%ls\n", ConvertErrorCodeToString(GetLastError()));
+        ConsoleLogger(WINTUN_LOG_ERR, Now(), ConvertErrorCodeToString(Error));
     }
+    DWORD_PTR pArgs[] = { (DWORD_PTR)Prefix, (DWORD_PTR)Error, (DWORD_PTR)SystemMessage };
     if (!FormatMessageW(
-        FORMAT_MESSAGE_FROM_STRING | FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_ARGUMENT_ARRAY,
+        FORMAT_MESSAGE_FROM_STRING | FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_ARGUMENT_ARRAY
+        | FORMAT_MESSAGE_MAX_WIDTH_MASK,
         &SystemMessage ? L"%1: %3(Code 0x%2!08X!)" : L"%1: Code 0x%2!08X!",
         0,
         0,
         (LPTSTR)&FormattedMessage,
         1024,
         (va_list*)pArgs)) {
-        printf("%ls\n", ConvertErrorCodeToString(GetLastError()));
+        ConsoleLogger(WINTUN_LOG_ERR, Now(), ConvertErrorCodeToString(Error));
     }
     if (FormattedMessage)
         ConsoleLogger(WINTUN_LOG_ERR, Now(), FormattedMessage);
@@ -308,6 +311,7 @@ SendPackets(_Inout_ DWORD_PTR SessionPtr)
 
 int __cdecl main(void)
 {
+    setlocale(LC_ALL, "zh_CN.UTF-8");
     HMODULE Wintun = InitializeWintun();
     if (!Wintun)
         return LogError(L"Failed to initialize Wintun", GetLastError());
@@ -348,6 +352,19 @@ int __cdecl main(void)
 
     DWORD Version = WintunGetRunningDriverVersion();
     Log(WINTUN_LOG_INFO, L"Wintun v%u.%u loaded", (Version >> 16) & 0xff, (Version >> 0) & 0xff);
+
+    PCSTR hostname = "code.xibai.xyz",servceport = "60001";
+    addrinfo *server_addrinfo = NULL;
+    if (getaddrinfo(hostname,servceport,NULL,&server_addrinfo))
+    {
+        WintunCloseAdapter(Adapter);
+        //    cleanupQuit:
+        SetConsoleCtrlHandler(CtrlHandler, FALSE);
+        CloseHandle(QuitEvent);
+        //    cleanupWintun:
+        FreeLibrary(Wintun);
+        return LogError(L"Failed to eval hostname", GetLastError());
+    }
 
     MIB_UNICASTIPADDRESS_ROW AddressRow;
     InitializeUnicastIpAddressEntry(&AddressRow);
