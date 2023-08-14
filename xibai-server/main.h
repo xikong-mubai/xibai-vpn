@@ -17,7 +17,7 @@
 
 
 //最多允许的客户端数量
-#define NUM 100
+#define NUM 10
 
 
 // 消息日志
@@ -54,6 +54,7 @@ in_addr_t getIP()
             if (ifa->ifa_name == "eth0" || ifa->ifa_name == "ens32")
             {
                 sin = (struct sockaddr_in*)ifa->ifa_addr;
+                printf("ipAddress: %s, interfaceName: %s\n", inet_ntoa(sin->sin_addr), ifa->ifa_name);
                 return sin->sin_addr.s_addr;
             }
 
@@ -80,12 +81,14 @@ in_addr_t getIP()
 // flag = 2  , data
 // flag = 3  , 
 // flag = 4  , no target and wait init
+#pragma pack(1)
 struct xibai_target
 {
     in_addr addr;
-    ushort port;
+    in_port_t port;
 };
 
+#pragma pack(1)
 struct xibai_data
 {
     xibai_target src_target;

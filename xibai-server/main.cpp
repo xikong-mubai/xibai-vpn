@@ -2,7 +2,7 @@
 
 int heart(int server_fd,sockaddr_in target_addr,int num) {
     int flag = fork();
-    char *message = "0\n";
+    char message[3] = "0\n";
     message[0] = '0' + num;
     switch (flag)
     {
@@ -12,7 +12,7 @@ int heart(int server_fd,sockaddr_in target_addr,int num) {
     case 0:                 // 子进程
         if (num > NUM)
         {
-            sendto(server_fd, "client's number is max!\n", 5, NULL, (sockaddr*)&target_addr, (socklen_t)sizeof(target_addr));
+            sendto(server_fd, "client's number is max!\n", 25, NULL, (sockaddr*)&target_addr, (socklen_t)sizeof(target_addr));
             return 0;
         }
         while (true)
@@ -38,7 +38,7 @@ int main()
 
     sockaddr_in RecvAddr;
     RecvAddr.sin_family = AF_INET;
-    RecvAddr.sin_port = htons(60001);
+    RecvAddr.sin_port = htons(50001);
     RecvAddr.sin_addr.s_addr = getIP();
 
     // 绑定
@@ -62,21 +62,23 @@ int main()
             log("recvfrom error\n");
         }
         else if (len < 0x10000 && len > 0) {
+            printf("recv success: %d\n", len);
             switch (buff->flag)
             {
             case 0:         //  heart
                 break;
             case 1:         //  init
-                currentNum++;
+                ++currentNum;
                 fork_pid[currentNum] = heart(server_fd, target_addr, currentNum);
                 if (fork_pid[currentNum])
                 {
                     target_list[currentNum].real_target = target_addr;
                     target_list[currentNum].realt_len = ta_len;
                     target_list[currentNum].flag = 1;
+                    printf("client add. real ip: %s, xibai ip: 192.168.222.%d\n", inet_ntoa(target_addr.sin_addr),currentNum);
                 }
                 break;
-            case 2:
+            case 2:         // data
                 udp_len = ((xibai_data*)buff)->len;
                 if (udp_len > len) {
                     char* message = (char*)malloc(1024);
@@ -91,6 +93,7 @@ int main()
                         printf("send error: %s\n", inet_ntoa(buff->dst_target.addr));
                         log("send error\n");
                     }
+                    printf("send success: %d\n", len);
                 }
 
                 break;
@@ -104,8 +107,6 @@ int main()
             buff[0] = '1';
             sendto(server_fd, buff, 13, NULL, (sockaddr*)&target_addr, (socklen_t)ta_len);
             */
-            
-            break;
         }
         else
         {

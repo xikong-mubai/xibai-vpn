@@ -312,13 +312,26 @@ SendPackets(_Inout_ DWORD_PTR SessionPtr)
 
 int __cdecl main(int argc, char** argv)
 {
+    // 设置输出字符环境
     setlocale(LC_ALL, "zh_CN.UTF-8");
+    if (argc != 3)
+    {
+        printf("usage: %s <hostname> <servicename>\n", argv[0]);
+        printf("getaddrinfo provides protocol-independent translation\n");
+        printf("   from an ANSI host name to an IP address\n");
+        printf("   example usage:\n", argv[0]);
+        printf("       %s www.contoso.com 0\n", argv[0]);
+        return 1;
+    }
+
+    // 加载 wintun.dll api
     HMODULE Wintun = InitializeWintun();
     if (!Wintun)
         return LogError(L"Failed to initialize Wintun", GetLastError());
     WintunSetLogger(ConsoleLogger);
     Log(WINTUN_LOG_INFO, L"Wintun library loaded");
 
+    // 创建事件处理
     DWORD LastError;
     HaveQuit = FALSE;
     QuitEvent = CreateEventW(NULL, TRUE, FALSE, NULL);
@@ -338,6 +351,7 @@ int __cdecl main(int argc, char** argv)
         return LastError;
     }
 
+    // 初始化虚拟网卡
     GUID ExampleGuid = { 0xdeadbabe, 0xcafe, 0xbeef, { 0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef } };
     WINTUN_ADAPTER_HANDLE Adapter = WintunCreateAdapter(L"xibai-vpn", L"野蛮人6专用联机辅助", &ExampleGuid);
     if (!Adapter)
@@ -359,9 +373,15 @@ int __cdecl main(int argc, char** argv)
     // Initialize Winsock
     iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
     if (iResult != NO_ERROR) {
-        wprintf(L"WSAStartup failed with error: %d\n", iResult);
-        return 1;
+        WintunCloseAdapter(Adapter);
+        //    cleanupQuit:
+        SetConsoleCtrlHandler(CtrlHandler, FALSE);
+        CloseHandle(QuitEvent);
+        //    cleanupWintun:
+        FreeLibrary(Wintun);
+        return LogError(L"WSAStartup failed with error: %d\n", iResult);
     }
+    // 解析服务器域名，argv[1] hostname、argv[2] port（optional）
     struct addrinfo hints;
     DWORD dwRetval;
     ZeroMemory(&hints, sizeof(hints));
@@ -372,6 +392,7 @@ int __cdecl main(int argc, char** argv)
     dwRetval = getaddrinfo(argv[1], argv[2], &hints, &server_addrinfo);
     if (dwRetval)
     {
+        WSACleanup();
         WintunCloseAdapter(Adapter);
         //    cleanupQuit:
         SetConsoleCtrlHandler(CtrlHandler, FALSE);
@@ -385,6 +406,7 @@ int __cdecl main(int argc, char** argv)
     int convertResult = MultiByteToWideChar(CP_UTF8, 0, tmp_ip, (int)strlen(tmp_ip), NULL, 0);
     if (convertResult <= 0)
     {
+        WSACleanup();
         WintunCloseAdapter(Adapter);
         //    cleanupQuit:
         SetConsoleCtrlHandler(CtrlHandler, FALSE);
@@ -399,6 +421,7 @@ int __cdecl main(int argc, char** argv)
         convertResult = MultiByteToWideChar(CP_UTF8, 0, tmp_ip, (int)strlen(tmp_ip), server_ip, convertResult);
         if (convertResult <= 0)
         {
+            WSACleanup();
             WintunCloseAdapter(Adapter);
             //    cleanupQuit:
             SetConsoleCtrlHandler(CtrlHandler, FALSE);
@@ -410,22 +433,115 @@ int __cdecl main(int argc, char** argv)
     }
     Log(WINTUN_LOG_INFO, L"resolve server ip: %s", server_ip);
 
+    // 初始化客户端服务端连接，获取局域网ip
+    SOCKET server_socket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (!server_socket){
+        WSACleanup();
+        WintunCloseAdapter(Adapter);
+        //    cleanupQuit:
+        SetConsoleCtrlHandler(CtrlHandler, FALSE);
+        CloseHandle(QuitEvent);
+        //    cleanupWintun:
+        FreeLibrary(Wintun);
+        return LogError(L"socket failed with error: %d\n", WSAGetLastError());
+    }
+    bool broadcast = 1;
+    if (setsockopt(server_socket, SOL_SOCKET, SO_BROADCAST, (char*)&broadcast, sizeof(bool)) < 0)
+    {
+        WSACleanup();
+        closesocket(server_socket);
+        WintunCloseAdapter(Adapter);
+        //    cleanupQuit:
+        SetConsoleCtrlHandler(CtrlHandler, FALSE);
+        CloseHandle(QuitEvent);
+        //    cleanupWintun:
+        FreeLibrary(Wintun);
+        return LogError(L"broadcast options failed\n", WSAGetLastError());
+    }
+    int timeout = 5000;
+    if (setsockopt(server_socket, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof(timeout)) < 0)
+    {
+        WSACleanup();
+        closesocket(server_socket);
+        WintunCloseAdapter(Adapter);
+        //    cleanupQuit:
+        SetConsoleCtrlHandler(CtrlHandler, FALSE);
+        CloseHandle(QuitEvent);
+        //    cleanupWintun:
+        FreeLibrary(Wintun);
+        return LogError(L"timeout options failed\n", WSAGetLastError());
+    }
+    
+    sockaddr_in recvAddr; int sock_len = sizeof(sockaddr);
+    recvAddr.sin_family = AF_INET;
+    recvAddr.sin_port = htons(50001);
+    //RecvAddr.sin_addr.s_addr = inet_addr("255.255.255.254");
+    recvAddr.sin_addr.s_addr = sockaddr_ipv4->sin_addr.S_un.S_addr;
+    char* buff = (char*)malloc(0x10000);
+    if (!buff){
+        WSACleanup();
+        closesocket(server_socket);
+        WintunCloseAdapter(Adapter);
+        //    cleanupQuit:
+        SetConsoleCtrlHandler(CtrlHandler, FALSE);
+        CloseHandle(QuitEvent);
+        //    cleanupWintun:
+        FreeLibrary(Wintun);
+        return LogError(L"broadcast options failed\n", WSAGetLastError());
+    }
+    memset(buff, 0, 0x10000);
+    memcpy(buff, "000000000000\x01\x00", 14);
+    if (-1 == sendto(server_socket, buff, 14, NULL, (sockaddr*)&recvAddr, sizeof(recvAddr))){
+        WSACleanup();
+        closesocket(server_socket);
+        WintunCloseAdapter(Adapter);
+        //    cleanupQuit:
+        SetConsoleCtrlHandler(CtrlHandler, FALSE);
+        CloseHandle(QuitEvent);
+        //    cleanupWintun:
+        FreeLibrary(Wintun);
+        return LogError(L"sendto failed with error: %d\n", WSAGetLastError());
+    }
+    int len = recvfrom(server_socket, buff, 0x10000, NULL, (sockaddr*)&recvAddr, &sock_len);
+    if (len == -1) {
+        WSACleanup();
+        closesocket(server_socket);
+        WintunCloseAdapter(Adapter);
+        //    cleanupQuit:
+        SetConsoleCtrlHandler(CtrlHandler, FALSE);
+        CloseHandle(QuitEvent);
+        //    cleanupWintun:
+        FreeLibrary(Wintun);
+        return LogError(L"recvfrom error: %d\n", WSAGetLastError());
+    }
+    if (buff[0] < '1' || buff[0] > '9')
+    {
+        WSACleanup();
+        closesocket(server_socket);
+        WintunCloseAdapter(Adapter);
+        //    cleanupQuit:
+        SetConsoleCtrlHandler(CtrlHandler, FALSE);
+        CloseHandle(QuitEvent);
+        //    cleanupWintun:
+        FreeLibrary(Wintun);
+        Log(WINTUN_LOG_ERR, L"client num exception\n");
+        return 0;
+    }
     //tmp_ip[0] = sockaddr_ipv4->sin_addr.S_un.S_addr;
-
-
-
 
     MIB_UNICASTIPADDRESS_ROW AddressRow;
     InitializeUnicastIpAddressEntry(&AddressRow);
     WintunGetAdapterLUID(Adapter, &AddressRow.InterfaceLuid);
     AddressRow.Address.Ipv4.sin_family = AF_INET;
-    //AddressRow.Address.Ipv4.sin_addr.S_un.S_addr = htonl((10 << 24) | (6 << 16) | (7 << 8) | (7 << 0)); /* 10.6.7.7 */
-    AddressRow.Address.Ipv4.sin_addr.S_un.S_addr = sockaddr_ipv4->sin_addr.S_un.S_addr; /* 10.6.7.7 */
+    AddressRow.Address.Ipv4.sin_addr.S_un.S_addr = htonl((192 << 24) | (168 << 16) | (222 << 8) | (buff[0] << 0)); /* 192.168.222.client */
+    //AddressRow.Address.Ipv4.sin_addr.S_un.S_addr = sockaddr_ipv4->sin_addr.S_un.S_addr; /* 10.6.7.7 */
     AddressRow.OnLinkPrefixLength = 24; /* This is a /24 network */
     AddressRow.DadState = IpDadStatePreferred;
     LastError = CreateUnicastIpAddressEntry(&AddressRow);
     if (LastError != ERROR_SUCCESS && LastError != ERROR_OBJECT_ALREADY_EXISTS)
     {
+        WSACleanup();
+        closesocket(server_socket);
         LogError(L"Failed to set IP address", LastError);
         WintunCloseAdapter(Adapter);
 //    cleanupQuit:
@@ -439,6 +555,8 @@ int __cdecl main(int argc, char** argv)
     WINTUN_SESSION_HANDLE Session = WintunStartSession(Adapter, 0x400000);
     if (!Session)
     {
+        WSACleanup();
+        closesocket(server_socket);
         LastError = LogLastError(L"Failed to create adapter");
         WintunCloseAdapter(Adapter);
 //    cleanupQuit:
@@ -473,6 +591,8 @@ cleanupWorkers:
         }
     }
     WintunEndSession(Session);
+    WSACleanup();
+    closesocket(server_socket);
 cleanupAdapter:
     WintunCloseAdapter(Adapter);
 cleanupQuit:
