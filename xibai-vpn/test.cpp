@@ -310,6 +310,25 @@ SendPackets(_Inout_ DWORD_PTR SessionPtr)
     return ERROR_SUCCESS;
 }
 
+void xibai_exit(int level,SOCKET server_socket, WINTUN_ADAPTER_HANDLE Adapter, HMODULE Wintun) {
+    switch (level)
+    {
+    default:
+        break;
+    case 4:
+        closesocket(server_socket);
+    case 3:
+        WSACleanup();
+    case 2:
+        WintunCloseAdapter(Adapter);
+    case 1:
+        SetConsoleCtrlHandler(CtrlHandler, FALSE);
+        CloseHandle(QuitEvent);
+    case 0:
+        FreeLibrary(Wintun);
+    }
+}
+
 int __cdecl main(int argc, char** argv)
 {
     // 设置输出字符环境
@@ -319,7 +338,7 @@ int __cdecl main(int argc, char** argv)
         printf("usage: %s <hostname> <servicename>\n", argv[0]);
         printf("getaddrinfo provides protocol-independent translation\n");
         printf("   from an ANSI host name to an IP address\n");
-        printf("   example usage:\n", argv[0]);
+        printf("   example usage:\n");
         printf("       %s www.contoso.com 0\n", argv[0]);
         return 1;
     }
@@ -338,16 +357,18 @@ int __cdecl main(int argc, char** argv)
     if (!QuitEvent)
     {
         LastError = LogError(L"Failed to create event", GetLastError());
-        FreeLibrary(Wintun);
+        xibai_exit(0, NULL, NULL, Wintun);
+        //FreeLibrary(Wintun);
         return LastError;
     }
     if (!SetConsoleCtrlHandler(CtrlHandler, TRUE))
     {
         LastError = LogError(L"Failed to set console handler", GetLastError());
-        SetConsoleCtrlHandler(CtrlHandler, FALSE);
-        CloseHandle(QuitEvent);
+        xibai_exit(1, NULL, NULL, Wintun);
+        //SetConsoleCtrlHandler(CtrlHandler, FALSE);
+        //CloseHandle(QuitEvent);
 //    cleanupWintun:
-        FreeLibrary(Wintun);
+        //FreeLibrary(Wintun);
         return LastError;
     }
 
@@ -358,10 +379,11 @@ int __cdecl main(int argc, char** argv)
     {
         LastError = GetLastError();
         LogError(L"Failed to create adapter", LastError);
-        SetConsoleCtrlHandler(CtrlHandler, FALSE);
-        CloseHandle(QuitEvent);
+        xibai_exit(1, NULL, NULL, Wintun);
+        //SetConsoleCtrlHandler(CtrlHandler, FALSE);
+        //CloseHandle(QuitEvent);
 //    cleanupWintun:
-        FreeLibrary(Wintun);
+        //FreeLibrary(Wintun);
         return LastError;
     }
 
@@ -373,12 +395,13 @@ int __cdecl main(int argc, char** argv)
     // Initialize Winsock
     iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
     if (iResult != NO_ERROR) {
-        WintunCloseAdapter(Adapter);
+        xibai_exit(2, NULL, Adapter, Wintun);
+        //WintunCloseAdapter(Adapter);
         //    cleanupQuit:
-        SetConsoleCtrlHandler(CtrlHandler, FALSE);
-        CloseHandle(QuitEvent);
+        //SetConsoleCtrlHandler(CtrlHandler, FALSE);
+        //CloseHandle(QuitEvent);
         //    cleanupWintun:
-        FreeLibrary(Wintun);
+        //FreeLibrary(Wintun);
         return LogError(L"WSAStartup failed with error: %d\n", iResult);
     }
     // 解析服务器域名，argv[1] hostname、argv[2] port（optional）
@@ -392,13 +415,14 @@ int __cdecl main(int argc, char** argv)
     dwRetval = getaddrinfo(argv[1], argv[2], &hints, &server_addrinfo);
     if (dwRetval)
     {
-        WSACleanup();
-        WintunCloseAdapter(Adapter);
+        xibai_exit(3, NULL, Adapter, Wintun);
+        //WSACleanup();
+        //WintunCloseAdapter(Adapter);
         //    cleanupQuit:
-        SetConsoleCtrlHandler(CtrlHandler, FALSE);
-        CloseHandle(QuitEvent);
+        //SetConsoleCtrlHandler(CtrlHandler, FALSE);
+        //CloseHandle(QuitEvent);
         //    cleanupWintun:
-        FreeLibrary(Wintun);
+        //FreeLibrary(Wintun);
         return LogError(L"getaddrinfo failed with error: %d\n", dwRetval);
     }
     sockaddr_in* sockaddr_ipv4 = (sockaddr_in*)(server_addrinfo->ai_addr);
@@ -406,13 +430,14 @@ int __cdecl main(int argc, char** argv)
     int convertResult = MultiByteToWideChar(CP_UTF8, 0, tmp_ip, (int)strlen(tmp_ip), NULL, 0);
     if (convertResult <= 0)
     {
-        WSACleanup();
-        WintunCloseAdapter(Adapter);
+        xibai_exit(3, NULL, Adapter, Wintun);
+        //WSACleanup();
+        //WintunCloseAdapter(Adapter);
         //    cleanupQuit:
-        SetConsoleCtrlHandler(CtrlHandler, FALSE);
-        CloseHandle(QuitEvent);
+        //SetConsoleCtrlHandler(CtrlHandler, FALSE);
+        //CloseHandle(QuitEvent);
         //    cleanupWintun:
-        FreeLibrary(Wintun);
+        //FreeLibrary(Wintun);
         return LogError(L"Exception occurred: Failure to convert its message text using MultiByteToWideChar\n", GetLastError());
     }
     else
@@ -421,13 +446,14 @@ int __cdecl main(int argc, char** argv)
         convertResult = MultiByteToWideChar(CP_UTF8, 0, tmp_ip, (int)strlen(tmp_ip), server_ip, convertResult);
         if (convertResult <= 0)
         {
-            WSACleanup();
-            WintunCloseAdapter(Adapter);
+            xibai_exit(3, NULL, Adapter, Wintun);
+            //WSACleanup();
+            //WintunCloseAdapter(Adapter);
             //    cleanupQuit:
-            SetConsoleCtrlHandler(CtrlHandler, FALSE);
-            CloseHandle(QuitEvent);
+            //SetConsoleCtrlHandler(CtrlHandler, FALSE);
+            //CloseHandle(QuitEvent);
             //    cleanupWintun:
-            FreeLibrary(Wintun);
+            //FreeLibrary(Wintun);
             return LogError(L"Exception occurred: Failure to convert its message text using MultiByteToWideChar\n", GetLastError());
         }
     }
@@ -436,39 +462,42 @@ int __cdecl main(int argc, char** argv)
     // 初始化客户端服务端连接，获取局域网ip
     SOCKET server_socket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (!server_socket){
-        WSACleanup();
-        WintunCloseAdapter(Adapter);
+        xibai_exit(3, NULL, Adapter, Wintun);
+        //WSACleanup();
+        //WintunCloseAdapter(Adapter);
         //    cleanupQuit:
-        SetConsoleCtrlHandler(CtrlHandler, FALSE);
-        CloseHandle(QuitEvent);
+        //SetConsoleCtrlHandler(CtrlHandler, FALSE);
+        //CloseHandle(QuitEvent);
         //    cleanupWintun:
-        FreeLibrary(Wintun);
+        //FreeLibrary(Wintun);
         return LogError(L"socket failed with error: %d\n", WSAGetLastError());
     }
     bool broadcast = 1;
     if (setsockopt(server_socket, SOL_SOCKET, SO_BROADCAST, (char*)&broadcast, sizeof(bool)) < 0)
     {
-        WSACleanup();
-        closesocket(server_socket);
-        WintunCloseAdapter(Adapter);
+        xibai_exit(4, server_socket, Adapter, Wintun);
+        //WSACleanup();
+        //closesocket(server_socket);
+        //WintunCloseAdapter(Adapter);
         //    cleanupQuit:
-        SetConsoleCtrlHandler(CtrlHandler, FALSE);
-        CloseHandle(QuitEvent);
+        //SetConsoleCtrlHandler(CtrlHandler, FALSE);
+        //CloseHandle(QuitEvent);
         //    cleanupWintun:
-        FreeLibrary(Wintun);
+        //FreeLibrary(Wintun);
         return LogError(L"broadcast options failed\n", WSAGetLastError());
     }
     int timeout = 5000;
     if (setsockopt(server_socket, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof(timeout)) < 0)
     {
-        WSACleanup();
-        closesocket(server_socket);
-        WintunCloseAdapter(Adapter);
+        xibai_exit(4, server_socket, Adapter, Wintun);
+        //WSACleanup();
+        //closesocket(server_socket);
+        //WintunCloseAdapter(Adapter);
         //    cleanupQuit:
-        SetConsoleCtrlHandler(CtrlHandler, FALSE);
-        CloseHandle(QuitEvent);
+        //SetConsoleCtrlHandler(CtrlHandler, FALSE);
+        //CloseHandle(QuitEvent);
         //    cleanupWintun:
-        FreeLibrary(Wintun);
+        //FreeLibrary(Wintun);
         return LogError(L"timeout options failed\n", WSAGetLastError());
     }
     
@@ -479,51 +508,55 @@ int __cdecl main(int argc, char** argv)
     recvAddr.sin_addr.s_addr = sockaddr_ipv4->sin_addr.S_un.S_addr;
     char* buff = (char*)malloc(0x10000);
     if (!buff){
-        WSACleanup();
-        closesocket(server_socket);
-        WintunCloseAdapter(Adapter);
+        xibai_exit(4, server_socket, Adapter, Wintun);
+        //WSACleanup();
+        //closesocket(server_socket);
+        //WintunCloseAdapter(Adapter);
         //    cleanupQuit:
-        SetConsoleCtrlHandler(CtrlHandler, FALSE);
-        CloseHandle(QuitEvent);
+        //SetConsoleCtrlHandler(CtrlHandler, FALSE);
+        //CloseHandle(QuitEvent);
         //    cleanupWintun:
-        FreeLibrary(Wintun);
+        //FreeLibrary(Wintun);
         return LogError(L"broadcast options failed\n", WSAGetLastError());
     }
     memset(buff, 0, 0x10000);
     memcpy(buff, "000000000000\x01\x00", 14);
     if (-1 == sendto(server_socket, buff, 14, NULL, (sockaddr*)&recvAddr, sizeof(recvAddr))){
-        WSACleanup();
-        closesocket(server_socket);
-        WintunCloseAdapter(Adapter);
+        xibai_exit(4, server_socket, Adapter, Wintun);
+        //WSACleanup();
+        //closesocket(server_socket);
+        //WintunCloseAdapter(Adapter);
         //    cleanupQuit:
-        SetConsoleCtrlHandler(CtrlHandler, FALSE);
-        CloseHandle(QuitEvent);
+        //SetConsoleCtrlHandler(CtrlHandler, FALSE);
+        //CloseHandle(QuitEvent);
         //    cleanupWintun:
-        FreeLibrary(Wintun);
+        //FreeLibrary(Wintun);
         return LogError(L"sendto failed with error: %d\n", WSAGetLastError());
     }
     int len = recvfrom(server_socket, buff, 0x10000, NULL, (sockaddr*)&recvAddr, &sock_len);
     if (len == -1) {
-        WSACleanup();
-        closesocket(server_socket);
-        WintunCloseAdapter(Adapter);
+        xibai_exit(4, server_socket, Adapter, Wintun);
+        //WSACleanup();
+        //closesocket(server_socket);
+        //WintunCloseAdapter(Adapter);
         //    cleanupQuit:
-        SetConsoleCtrlHandler(CtrlHandler, FALSE);
-        CloseHandle(QuitEvent);
+        //SetConsoleCtrlHandler(CtrlHandler, FALSE);
+        //CloseHandle(QuitEvent);
         //    cleanupWintun:
-        FreeLibrary(Wintun);
+        //FreeLibrary(Wintun);
         return LogError(L"recvfrom error: %d\n", WSAGetLastError());
     }
     if (buff[0] < '1' || buff[0] > '9')
     {
-        WSACleanup();
-        closesocket(server_socket);
-        WintunCloseAdapter(Adapter);
+        xibai_exit(4, server_socket, Adapter, Wintun);
+        //WSACleanup();
+        //closesocket(server_socket);
+        //WintunCloseAdapter(Adapter);
         //    cleanupQuit:
-        SetConsoleCtrlHandler(CtrlHandler, FALSE);
-        CloseHandle(QuitEvent);
+        //SetConsoleCtrlHandler(CtrlHandler, FALSE);
+        //CloseHandle(QuitEvent);
         //    cleanupWintun:
-        FreeLibrary(Wintun);
+        //FreeLibrary(Wintun);
         Log(WINTUN_LOG_ERR, L"client num exception\n");
         return 0;
     }
@@ -540,30 +573,34 @@ int __cdecl main(int argc, char** argv)
     LastError = CreateUnicastIpAddressEntry(&AddressRow);
     if (LastError != ERROR_SUCCESS && LastError != ERROR_OBJECT_ALREADY_EXISTS)
     {
-        WSACleanup();
-        closesocket(server_socket);
-        LogError(L"Failed to set IP address", LastError);
-        WintunCloseAdapter(Adapter);
+        xibai_exit(4, server_socket, Adapter, Wintun);
+        //WSACleanup();
+        //closesocket(server_socket);
+        //WintunCloseAdapter(Adapter);
 //    cleanupQuit:
-        SetConsoleCtrlHandler(CtrlHandler, FALSE);
-        CloseHandle(QuitEvent);
+        //SetConsoleCtrlHandler(CtrlHandler, FALSE);
+        //CloseHandle(QuitEvent);
 //    cleanupWintun:
-        FreeLibrary(Wintun);
+        //FreeLibrary(Wintun);
+
+        LogError(L"Failed to set IP address", LastError);
         return LastError;
     }
 
     WINTUN_SESSION_HANDLE Session = WintunStartSession(Adapter, 0x400000);
     if (!Session)
     {
-        WSACleanup();
-        closesocket(server_socket);
-        LastError = LogLastError(L"Failed to create adapter");
-        WintunCloseAdapter(Adapter);
+        xibai_exit(4, server_socket, Adapter, Wintun);
+        //WSACleanup();
+        //closesocket(server_socket);
+        //WintunCloseAdapter(Adapter);
 //    cleanupQuit:
-        SetConsoleCtrlHandler(CtrlHandler, FALSE);
-        CloseHandle(QuitEvent);
+        //SetConsoleCtrlHandler(CtrlHandler, FALSE);
+        //CloseHandle(QuitEvent);
 //    cleanupWintun:
-        FreeLibrary(Wintun);
+        //FreeLibrary(Wintun);
+
+        LastError = LogLastError(L"Failed to create adapter");
         return LastError;
     }
 
@@ -591,14 +628,15 @@ cleanupWorkers:
         }
     }
     WintunEndSession(Session);
-    WSACleanup();
-    closesocket(server_socket);
+    xibai_exit(4, server_socket, Adapter, Wintun);
+    //WSACleanup();
+    //closesocket(server_socket);
 cleanupAdapter:
-    WintunCloseAdapter(Adapter);
+    //WintunCloseAdapter(Adapter);
 cleanupQuit:
-    SetConsoleCtrlHandler(CtrlHandler, FALSE);
-    CloseHandle(QuitEvent);
+    //SetConsoleCtrlHandler(CtrlHandler, FALSE);
+    //CloseHandle(QuitEvent);
 cleanupWintun:
-    FreeLibrary(Wintun);
+    //FreeLibrary(Wintun);
     return LastError;
 }
