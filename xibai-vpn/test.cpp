@@ -240,6 +240,20 @@ MakeICMP(_Out_writes_bytes_all_(28) BYTE Packet[28])
     Log(WINTUN_LOG_INFO, L"Sending IPv4 ICMP echo request to 10.6.7.8 from 10.6.7.7");
 }
 
+
+static int
+CheckPacket(_In_ const BYTE* Packet, _In_ DWORD PacketSize)
+{
+    if (Packet[12] != 8 || Packet[13] != 0)
+    {
+        return 0;
+    }
+    else if(Packet[23] != 17)
+    {
+        return 0;
+    }
+}
+
 static DWORD WINAPI
 ReceivePackets(_Inout_ DWORD_PTR SessionPtr)
 {
@@ -252,7 +266,14 @@ ReceivePackets(_Inout_ DWORD_PTR SessionPtr)
         BYTE* Packet = WintunReceivePacket(Session, &PacketSize);
         if (Packet)
         {
+            if (CheckPacket(Packet, PacketSize)) {
+
+            }
+            else {
+
+            }
             PrintPacket(Packet, PacketSize);
+
             WintunReleaseReceivePacket(Session, Packet);
         }
         else
@@ -265,7 +286,7 @@ ReceivePackets(_Inout_ DWORD_PTR SessionPtr)
                     continue;
                 return ERROR_SUCCESS;
             default:
-                LogError(L"Packet read failed", LastError);
+                LogError(L"Packet check failed", LastError);
                 return LastError;
             }
         }
