@@ -3,19 +3,7 @@
  * Copyright (C) 2018-2021 WireGuard LLC. All Rights Reserved.
  */
 
-#include <winsock2.h>
-#include <Windows.h>
-#include <ws2ipdef.h>
-#include <iphlpapi.h>
-#include <WS2tcpip.h>
-#include <mstcpip.h>
-#include <ip2string.h>
-#include <winternl.h>
-#include <stdarg.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <locale.h>
-#include "wintun.h"
+#include "wintest.h"
 
 #pragma comment (lib, "Ws2_32.lib")
 #pragma comment(lib, "ntdll.lib")
