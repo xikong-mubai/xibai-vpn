@@ -19,9 +19,9 @@
 typedef struct in_port_t
 {
     union {
-        struct { UCHAR s_b1, s_b2, s_b3, s_b4; } S_un_b;
-        struct { USHORT s_w1, s_w2; } S_un_w;
-        ULONG S_addr;
+        struct { UCHAR s_b1, s_b2; } S_un_b;
+        struct { USHORT s_w1; } S_un_w;
+        ULONG S_port;
     } S_un;
 };
 
