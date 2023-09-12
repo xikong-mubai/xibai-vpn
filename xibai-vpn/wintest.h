@@ -16,14 +16,13 @@
 
 
 #pragma pack(1)
-typedef struct in_port_t
+typedef struct in_port
 {
     union {
         struct { UCHAR s_b1, s_b2; } S_un_b;
-        struct { USHORT s_w1; } S_un_w;
-        ULONG S_port;
+        USHORT S_port;
     } S_un;
-};
+}in_port_t;
 
 // flag = 0  , heart data
 // flag = 1  , init

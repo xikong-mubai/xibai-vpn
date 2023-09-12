@@ -252,6 +252,9 @@ CheckPacket(_In_ const BYTE* Packet, _In_ DWORD PacketSize)
     {
         return 0;
     }
+    else {
+        return 1;
+    }
 }
 
 static DWORD WINAPI
@@ -259,21 +262,28 @@ ReceivePackets(_Inout_ DWORD_PTR SessionPtr)
 {
     WINTUN_SESSION_HANDLE Session = (WINTUN_SESSION_HANDLE)SessionPtr;
     HANDLE WaitHandles[] = { WintunGetReadWaitEvent(Session), QuitEvent };
+    xibai_data* data = (xibai_data*)malloc(sizeof(xibai_data));
+    data->flag = 2;
 
     while (!HaveQuit)
     {
         DWORD PacketSize;
         BYTE* Packet = WintunReceivePacket(Session, &PacketSize);
+
         if (Packet)
         {
             if (CheckPacket(Packet, PacketSize)) {
-
+                data->src_target.addr.S_un.S_addr = htonl(*(u_long*)(Packet + 26));
+                data->src_target.port.S_un.S_port = htons(*(short*)(Packet + 34));
+                data->dst_target.addr.S_un.S_addr = htonl(*(u_long*)(Packet + 30));
+                data->dst_target.port.S_un.S_port = htons(*(short*)(Packet + 36));
+                data->len = PacketSize;
+                memcpy(data->data, Packet, PacketSize);
             }
             else {
-
+                Log(WINTUN_LOG_INFO,L"Packet is not udp.");
             }
             PrintPacket(Packet, PacketSize);
-
             WintunReleaseReceivePacket(Session, Packet);
         }
         else
