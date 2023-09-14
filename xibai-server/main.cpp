@@ -12,12 +12,13 @@ int heart(int server_fd,sockaddr_in target_addr,int num) {
     case 0:                 // 子进程
         if (num >= NUM)
         {
-            sendto(server_fd, "client's number is max!\n", 25, NULL, (sockaddr*)&target_addr, (socklen_t)sizeof(target_addr));
+            sendto(server_fd, "client's number is max!\n", 24, NULL, (sockaddr*)&target_addr, (socklen_t)sizeof(target_addr));
             return 0;
         }
         while (true)
         {
             sendto(server_fd, message, 2, NULL, (sockaddr*)&target_addr, (socklen_t)sizeof(target_addr));
+            printf("heart\n");
             sleep(1);
         }
         break;

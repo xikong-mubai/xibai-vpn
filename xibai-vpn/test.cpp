@@ -244,11 +244,7 @@ MakeICMP(_Out_writes_bytes_all_(28) BYTE Packet[28])
 static int
 CheckPacket(_In_ const BYTE* Packet, _In_ DWORD PacketSize)
 {
-    if (Packet[12] != 8 || Packet[13] != 0)
-    {
-        return 0;
-    }
-    else if(Packet[23] != 17)
+    if(Packet[9] != 17)
     {
         return 0;
     }
@@ -280,36 +276,40 @@ ReceivePackets(_Inout_ DWORD_PTR SessionPtr)
         if (Packet)
         {
             if (CheckPacket(Packet, PacketSize)) {
-                data->src_target.addr.S_un.S_addr = htonl(*(u_long*)(Packet + 26));
-                data->src_target.port.S_un.S_port = htons(*(short*)(Packet + 34));
-                data->dst_target.addr.S_un.S_addr = htonl(*(u_long*)(Packet + 30));
-                data->dst_target.port.S_un.S_port = htons(*(short*)(Packet + 36));
+                data->src_target.addr.S_un.S_addr = htonl(*(u_long*)(Packet + 12));
+                data->src_target.port.S_un.S_port = htons(*(short*)(Packet + 20));
+                data->dst_target.addr.S_un.S_addr = htonl(*(u_long*)(Packet + 16));
+                data->dst_target.port.S_un.S_port = htons(*(short*)(Packet + 22));
                 data->len = PacketSize; data->S_un.S_un_b.s_b2 = 0;
                 if (PacketSize > 65515)
                 {
                     memcpy(data->data, Packet, 65515);
-                    len = sendto(server_socket, (char*)data, 65536, NULL, NULL, NULL);
+                    len = sendto(server_socket, (char*)data, 65536, NULL, (sockaddr*)&recvAddr, sizeof(recvAddr));
                     if (len != -1) {
                         PrintPacket(Packet, PacketSize);
                         memcpy(data->data, Packet + 65515, PacketSize - 65515);
                         data->S_un.S_un_b.s_b2 += 1;
-                        len = sendto(server_socket, (char*)data, PacketSize - 65515 + 21, NULL, NULL, NULL);
+                        len = sendto(server_socket, (char*)data, PacketSize - 65515 + 21, NULL, (sockaddr*)&recvAddr, sizeof(recvAddr));
                         if (len != -1) {
                             data->S_un.S_un_b.s_b1 += 1;
                             PrintPacket(Packet, PacketSize);
                         }
                         else {
                             Log(WINTUN_LOG_ERR, L"send data failed");
+                            DWORD LastError = GetLastError();
+                            LogError(L"Packet check failed", LastError);
                         }
                     }
                     else
                     {
                         Log(WINTUN_LOG_ERR, L"send data failed");
+                        DWORD LastError = GetLastError();
+                        LogError(L"Packet check failed", LastError);
                     }
                 }
                 else {
                     memcpy(data->data, Packet, PacketSize);
-                    len = sendto(server_socket, (char*)data, PacketSize + 21, NULL, NULL, NULL);
+                    len = sendto(server_socket, (char*)data, PacketSize + 21, NULL, (sockaddr*)&recvAddr, sizeof(recvAddr));
                     if (len != -1) {
                         PrintPacket(Packet, PacketSize);
                         data->S_un.S_un_b.s_b1 += 1;
@@ -317,6 +317,8 @@ ReceivePackets(_Inout_ DWORD_PTR SessionPtr)
                     else
                     {
                         Log(WINTUN_LOG_ERR, L"send data failed");
+                        DWORD LastError = GetLastError();
+                        LogError(L"Packet check failed", LastError);
                     }
                 }
             }
@@ -391,12 +393,16 @@ SendPackets(_Inout_ DWORD_PTR SessionPtr)
             //}
         }
         else {
+            if (len == 2 && *(((char*)data)+1) == '\x00' && *(char*)data >= '0' && *(char*)data <= '9')
+            {
+                Log(WINTUN_LOG_INFO, L"this is a heart"); continue;
+            }
             BYTE* Packet = WintunAllocateSendPacket(Session, len);
             if (Packet)
             {
                 //MakeICMP(Packet);
                 memset(Packet, 0, len);
-                memcpy(Packet, data->data, data->len);
+                memcpy(Packet, data->data, len);
                 //len = recvfrom(server_socket, (char*)data, 0x10000, NULL, (sockaddr*)&recvAddr, &sock_len);
                 //if (len == -1) {
                 //    Log(WINTUN_LOG_ERR, L"recv data failed");

@@ -44,12 +44,12 @@ struct xibai_data
 {
     xibai_target src_target;
     xibai_target dst_target;
-    char flag;
+    unsigned char flag;
     union {
         struct { USHORT s_b1, s_b2; } S_un_b;
         ULONG S_num;
     }S_un;
-    int len;
+    unsigned int len;
     unsigned char data[65515];
 };
 
