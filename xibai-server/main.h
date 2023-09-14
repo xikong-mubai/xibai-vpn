@@ -94,8 +94,12 @@ struct xibai_data
     xibai_target src_target;
     xibai_target dst_target;
     char flag;
+    union {
+        struct { unsigned short s_b1, s_b2; } S_un_b;
+        uint32_t S_num;
+    }S_un;
     int len;
-    uint8_t data[65519];
+    uint8_t data[65515];
 };
 
 struct xibai_ready

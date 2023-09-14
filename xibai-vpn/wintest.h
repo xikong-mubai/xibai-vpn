@@ -14,6 +14,9 @@
 #include <locale.h>
 #include "wintun.h"
 
+SOCKET server_socket;
+sockaddr_in recvAddr;
+int sock_len = sizeof(sockaddr);
 
 #pragma pack(1)
 typedef struct in_port
@@ -42,8 +45,12 @@ struct xibai_data
     xibai_target src_target;
     xibai_target dst_target;
     char flag;
+    union {
+        struct { USHORT s_b1, s_b2; } S_un_b;
+        ULONG S_num;
+    }S_un;
     int len;
-    unsigned char data[65519];
+    unsigned char data[65515];
 };
 
 #pragma pack(1)

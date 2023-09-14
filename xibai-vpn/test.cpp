@@ -263,8 +263,15 @@ ReceivePackets(_Inout_ DWORD_PTR SessionPtr)
     WINTUN_SESSION_HANDLE Session = (WINTUN_SESSION_HANDLE)SessionPtr;
     HANDLE WaitHandles[] = { WintunGetReadWaitEvent(Session), QuitEvent };
     xibai_data* data = (xibai_data*)malloc(sizeof(xibai_data));
-    data->flag = 2;
-
+    if (!data)
+    {
+        Log(WINTUN_LOG_ERR, L"recv_packet_buffer_ptr init error!");
+        DWORD LastError = GetLastError();
+        LogError(L"ReceivePackets Packet check failed", LastError);
+        return LastError;
+    }
+    data->flag = 2; data->S_un.S_num = 0;
+    int len = 0;
     while (!HaveQuit)
     {
         DWORD PacketSize;
@@ -277,13 +284,45 @@ ReceivePackets(_Inout_ DWORD_PTR SessionPtr)
                 data->src_target.port.S_un.S_port = htons(*(short*)(Packet + 34));
                 data->dst_target.addr.S_un.S_addr = htonl(*(u_long*)(Packet + 30));
                 data->dst_target.port.S_un.S_port = htons(*(short*)(Packet + 36));
-                data->len = PacketSize;
-                memcpy(data->data, Packet, PacketSize);
+                data->len = PacketSize; data->S_un.S_un_b.s_b2 = 0;
+                if (PacketSize > 65515)
+                {
+                    memcpy(data->data, Packet, 65515);
+                    len = sendto(server_socket, (char*)data, 65536, NULL, NULL, NULL);
+                    if (len != -1) {
+                        PrintPacket(Packet, PacketSize);
+                        memcpy(data->data, Packet + 65515, PacketSize - 65515);
+                        data->S_un.S_un_b.s_b2 += 1;
+                        len = sendto(server_socket, (char*)data, PacketSize - 65515 + 21, NULL, NULL, NULL);
+                        if (len != -1) {
+                            data->S_un.S_un_b.s_b1 += 1;
+                            PrintPacket(Packet, PacketSize);
+                        }
+                        else {
+                            Log(WINTUN_LOG_ERR, L"send data failed");
+                        }
+                    }
+                    else
+                    {
+                        Log(WINTUN_LOG_ERR, L"send data failed");
+                    }
+                }
+                else {
+                    memcpy(data->data, Packet, PacketSize);
+                    len = sendto(server_socket, (char*)data, PacketSize + 21, NULL, NULL, NULL);
+                    if (len != -1) {
+                        PrintPacket(Packet, PacketSize);
+                        data->S_un.S_un_b.s_b1 += 1;
+                    }
+                    else
+                    {
+                        Log(WINTUN_LOG_ERR, L"send data failed");
+                    }
+                }
             }
             else {
                 Log(WINTUN_LOG_INFO,L"Packet is not udp.");
             }
-            PrintPacket(Packet, PacketSize);
             WintunReleaseReceivePacket(Session, Packet);
         }
         else
@@ -308,23 +347,74 @@ static DWORD WINAPI
 SendPackets(_Inout_ DWORD_PTR SessionPtr)
 {
     WINTUN_SESSION_HANDLE Session = (WINTUN_SESSION_HANDLE)SessionPtr;
+    xibai_data* data = (xibai_data*)malloc(sizeof(xibai_data));
+    if (!data)
+    {
+        Log(WINTUN_LOG_ERR, L"send_packet_buffer_ptr init error!");
+        DWORD LastError = GetLastError();
+        LogError(L"SendPackets Packet check failed", LastError);
+        return LastError;
+    }
+    int len = 0;
     while (!HaveQuit)
     {
-        BYTE* Packet = WintunAllocateSendPacket(Session, 28);
-        if (Packet)
-        {
-            MakeICMP(Packet);
-            WintunSendPacket(Session, Packet);
+        len = recvfrom(server_socket, (char*)data, 0x10000, NULL, (sockaddr*)&recvAddr, &sock_len);
+        if (len == -1) {
+            Log(WINTUN_LOG_ERR, L"recv data failed");
+            continue;
         }
-        else if (GetLastError() != ERROR_BUFFER_OVERFLOW)
-            return LogLastError(L"Packet write failed");
+        if (len > 65515)
+        {
+            Log(WINTUN_LOG_WARN, L"真的有超过65515的包！！！");
 
-        switch (WaitForSingleObject(QuitEvent, 1000 /* 1 second */))
-        {
-        case WAIT_ABANDONED:
-        case WAIT_OBJECT_0:
-            return ERROR_SUCCESS;
+            //BYTE* Packet = WintunAllocateSendPacket(Session, 0x10000);
+            //if (Packet)
+            //{
+            //    //MakeICMP(Packet);
+            //    memset(Packet, 0, 0x10000);
+            //    memcpy(Packet, data->data, 65515);
+            //    //len = recvfrom(server_socket, (char*)data, 0x10000, NULL, (sockaddr*)&recvAddr, &sock_len);
+            //    //if (len == -1) {
+            //    //    Log(WINTUN_LOG_ERR, L"recv data failed");
+            //    //    continue;
+            //    //}
+            //    WintunSendPacket(Session, Packet);
+            //}
+            //else if (GetLastError() != ERROR_BUFFER_OVERFLOW)
+            //    return LogLastError(L"Packet write failed");
+
+            //switch (WaitForSingleObject(QuitEvent, 1000 /* 1 second */))
+            //{
+            //case WAIT_ABANDONED:
+            //case WAIT_OBJECT_0:
+            //    return ERROR_SUCCESS;
+            //}
         }
+        else {
+            BYTE* Packet = WintunAllocateSendPacket(Session, len);
+            if (Packet)
+            {
+                //MakeICMP(Packet);
+                memset(Packet, 0, len);
+                memcpy(Packet, data->data, data->len);
+                //len = recvfrom(server_socket, (char*)data, 0x10000, NULL, (sockaddr*)&recvAddr, &sock_len);
+                //if (len == -1) {
+                //    Log(WINTUN_LOG_ERR, L"recv data failed");
+                //    continue;
+                //}
+                WintunSendPacket(Session, Packet);
+            }
+            else if (GetLastError() != ERROR_BUFFER_OVERFLOW)
+                return LogLastError(L"Packet write failed");
+
+            switch (WaitForSingleObject(QuitEvent, 1000 /* 1 second */))
+            {
+            case WAIT_ABANDONED:
+            case WAIT_OBJECT_0:
+                return ERROR_SUCCESS;
+            }
+        }
+
     }
     return ERROR_SUCCESS;
 }
@@ -406,6 +496,7 @@ int __cdecl main(int argc, char** argv)
         return LastError;
     }
 
+    Log(WINTUN_LOG_INFO, L"欢迎使用野蛮人6专用联机辅助");
     DWORD Version = WintunGetRunningDriverVersion();
     Log(WINTUN_LOG_INFO, L"Wintun v%u.%u loaded", (Version >> 16) & 0xff, (Version >> 0) & 0xff);
 
@@ -423,7 +514,9 @@ int __cdecl main(int argc, char** argv)
         //FreeLibrary(Wintun);
         return LogError(L"WSAStartup failed with error: %d\n", iResult);
     }
+
     // 解析服务器域名，argv[1] hostname、argv[2] port（optional）
+    Log(WINTUN_LOG_INFO, L"try resolve hostname...");
     struct addrinfo hints;
     DWORD dwRetval;
     ZeroMemory(&hints, sizeof(hints));
@@ -479,7 +572,8 @@ int __cdecl main(int argc, char** argv)
     Log(WINTUN_LOG_INFO, L"resolve server ip: %s", server_ip);
 
     // 初始化客户端服务端连接，获取局域网ip
-    SOCKET server_socket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    Log(WINTUN_LOG_INFO, L"Initializing connection......");
+    server_socket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (!server_socket){
         xibai_exit(3, NULL, Adapter, Wintun);
         //WSACleanup();
@@ -519,8 +613,9 @@ int __cdecl main(int argc, char** argv)
         //FreeLibrary(Wintun);
         return LogError(L"timeout options failed\n", WSAGetLastError());
     }
-    
-    sockaddr_in recvAddr; int sock_len = sizeof(sockaddr);
+    Log(WINTUN_LOG_INFO, L"Initializing connection done");
+    Log(WINTUN_LOG_INFO, L"create conncetion's buffer");
+
     recvAddr.sin_family = AF_INET;
     recvAddr.sin_port = htons(50001);
     //RecvAddr.sin_addr.s_addr = inet_addr("255.255.255.254");
@@ -536,11 +631,12 @@ int __cdecl main(int argc, char** argv)
         //CloseHandle(QuitEvent);
         //    cleanupWintun:
         //FreeLibrary(Wintun);
-        return LogError(L"broadcast options failed\n", WSAGetLastError());
+        return LogError(L"buffer create failed\n", WSAGetLastError());
     }
     memset(buff, 0, 0x10000);
-    memcpy(buff, "000000000000\x01\x00", 14);
-    if (-1 == sendto(server_socket, buff, 14, NULL, (sockaddr*)&recvAddr, sizeof(recvAddr))){
+    memcpy(buff, "000000000000\x01\x00\x00\x00\x00\x00\x00\x00\x00", 22);
+    Log(WINTUN_LOG_INFO, L"try connect server...");
+    if (-1 == sendto(server_socket, buff, 21, NULL, (sockaddr*)&recvAddr, sizeof(recvAddr))){
         xibai_exit(4, server_socket, Adapter, Wintun);
         //WSACleanup();
         //closesocket(server_socket);
@@ -576,16 +672,18 @@ int __cdecl main(int argc, char** argv)
         //CloseHandle(QuitEvent);
         //    cleanupWintun:
         //FreeLibrary(Wintun);
-        Log(WINTUN_LOG_ERR, L"client num exception\n");
+        Log(WINTUN_LOG_ERR, L"client num exception, please check connection number\n");
         return 0;
     }
+    Log(WINTUN_LOG_INFO, L"connect server success");
     //tmp_ip[0] = sockaddr_ipv4->sin_addr.S_un.S_addr;
 
+    Log(WINTUN_LOG_INFO, L"配置野蛮人6专用辅助……");
     MIB_UNICASTIPADDRESS_ROW AddressRow;
     InitializeUnicastIpAddressEntry(&AddressRow);
     WintunGetAdapterLUID(Adapter, &AddressRow.InterfaceLuid);
     AddressRow.Address.Ipv4.sin_family = AF_INET;
-    AddressRow.Address.Ipv4.sin_addr.S_un.S_addr = htonl((192 << 24) | (168 << 16) | (222 << 8) | (buff[0] << 0)); /* 192.168.222.client */
+    AddressRow.Address.Ipv4.sin_addr.S_un.S_addr = htonl((192 << 24) | (168 << 16) | (222 << 8) | (atoi(buff) << 0)); /* 192.168.222.client */
     //AddressRow.Address.Ipv4.sin_addr.S_un.S_addr = sockaddr_ipv4->sin_addr.S_un.S_addr; /* 10.6.7.7 */
     AddressRow.OnLinkPrefixLength = 24; /* This is a /24 network */
     AddressRow.DadState = IpDadStatePreferred;
@@ -604,7 +702,7 @@ int __cdecl main(int argc, char** argv)
 
         LogError(L"Failed to set IP address", LastError);
         return LastError;
-    }
+    }Log(WINTUN_LOG_INFO, L"配置成功");
 
     WINTUN_SESSION_HANDLE Session = WintunStartSession(Adapter, 0x400000);
     if (!Session)

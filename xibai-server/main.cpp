@@ -2,7 +2,7 @@
 
 int heart(int server_fd,sockaddr_in target_addr,int num) {
     int flag = fork();
-    char message[3] = "0\n";
+    char message[3] = "0\x00";
     message[0] = '0' + num;
     switch (flag)
     {
@@ -10,7 +10,7 @@ int heart(int server_fd,sockaddr_in target_addr,int num) {
         return -1;
         break;
     case 0:                 // 子进程
-        if (num > NUM)
+        if (num >= NUM)
         {
             sendto(server_fd, "client's number is max!\n", 25, NULL, (sockaddr*)&target_addr, (socklen_t)sizeof(target_addr));
             return 0;
@@ -68,14 +68,17 @@ int main()
             case 0:         //  heart
                 break;
             case 1:         //  init
-                ++currentNum;
                 fork_pid[currentNum] = heart(server_fd, target_addr, currentNum);
                 if (fork_pid[currentNum])
                 {
                     target_list[currentNum].real_target = target_addr;
                     target_list[currentNum].realt_len = ta_len;
                     target_list[currentNum].flag = 1;
+                    ++currentNum;
                     printf("client add. real ip: %s, xibai ip: 192.168.222.%d\n", inet_ntoa(target_addr.sin_addr),currentNum);
+                }
+                else {
+                    printf("fork failed %d", currentNum);
                 }
                 break;
             case 2:         // data
