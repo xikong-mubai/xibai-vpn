@@ -76,10 +76,10 @@ in_addr_t getIP()
 }
 
 
-// flag = 0  , heart data
+// flag = 0  , heart
 // flag = 1  , init
 // flag = 2  , data
-// flag = 3  , 
+// flag = 3  , exit
 // flag = 4  , no target and wait init
 #pragma pack(1)
 struct xibai_target
@@ -94,12 +94,9 @@ struct xibai_data
     xibai_target src_target;
     xibai_target dst_target;
     char flag;
-    union {
-        struct { unsigned short s_b1, s_b2; } S_un_b;
-        uint32_t S_num;
-    }S_un;
+    struct { unsigned short s_b1;uint8_t s_b2; } S_num;
     int len;
-    uint8_t data[65515];
+    uint8_t data[1452];
 };
 
 struct xibai_ready

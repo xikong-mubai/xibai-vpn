@@ -266,7 +266,7 @@ ReceivePackets(_Inout_ DWORD_PTR SessionPtr)
         LogError(L"ReceivePackets Packet check failed", LastError);
         return LastError;
     }
-    data->flag = 2; data->S_un.S_num = 0;
+    data->flag = 2; data->S_num = { 0 };
     int len = 0;
     while (!HaveQuit)
     {
@@ -276,25 +276,53 @@ ReceivePackets(_Inout_ DWORD_PTR SessionPtr)
         if (Packet)
         {
             if (CheckPacket(Packet, PacketSize)) {
-                data->src_target.addr.S_un.S_addr = htonl(*(u_long*)(Packet + 12));
-                data->src_target.port.S_un.S_port = htons(*(short*)(Packet + 20));
-                data->dst_target.addr.S_un.S_addr = htonl(*(u_long*)(Packet + 16));
-                data->dst_target.port.S_un.S_port = htons(*(short*)(Packet + 22));
-                data->len = PacketSize; data->S_un.S_un_b.s_b2 = 0;
-                if (PacketSize > 65515)
+                data->src_target.addr.S_un.S_addr = *(u_long*)(Packet + 12);
+                data->src_target.port.S_un.S_port = *(short*)(Packet + 20);
+                data->dst_target.addr.S_un.S_addr = *(u_long*)(Packet + 16);
+                data->dst_target.port.S_un.S_port = *(short*)(Packet + 22);
+                data->len = PacketSize; data->S_num.s_b2 = 0;
+                if (PacketSize > 1500)
                 {
-                    memcpy(data->data, Packet, 65515);
-                    len = sendto(server_socket, (char*)data, 65536, NULL, (sockaddr*)&recvAddr, sizeof(recvAddr));
+                    Log(WINTUN_LOG_WARN, L"recv_packet_size so big!!!");
+                    //memcpy(data->data, Packet, 65515);
+                    //len = sendto(server_socket, (char*)data, 65536, NULL, (sockaddr*)&recvAddr, sizeof(recvAddr));
+                    //if (len != -1) {
+                    //    PrintPacket(Packet, PacketSize);
+                    //    memcpy(data->data, Packet + 65515, PacketSize - 65515);
+                    //    data->S_un.S_un_b.s_b2 += 1;
+                    //    len = sendto(server_socket, (char*)data, PacketSize - 65515 + 21, NULL, (sockaddr*)&recvAddr, sizeof(recvAddr));
+                    //    if (len != -1) {
+                    //        data->S_un.S_un_b.s_b1 += 1;
+                    //        PrintPacket(Packet, PacketSize);
+                    //    }
+                    //    else {
+                    //        Log(WINTUN_LOG_ERR, L"send data failed");
+                    //        DWORD LastError = GetLastError();
+                    //        LogError(L"Packet check failed", LastError);
+                    //    }
+                    //}
+                    //else
+                    //{
+                    //    Log(WINTUN_LOG_ERR, L"send data failed");
+                    //    DWORD LastError = GetLastError();
+                    //    LogError(L"Packet check failed", LastError);
+                    //}
+                }
+                else if (PacketSize>1452)
+                {
+                    memcpy(data->data, Packet, 1452);
+                    len = sendto(server_socket, (char*)data, 1472, NULL, (sockaddr*)&recvAddr, sizeof(recvAddr));
                     if (len != -1) {
                         PrintPacket(Packet, PacketSize);
-                        memcpy(data->data, Packet + 65515, PacketSize - 65515);
-                        data->S_un.S_un_b.s_b2 += 1;
-                        len = sendto(server_socket, (char*)data, PacketSize - 65515 + 21, NULL, (sockaddr*)&recvAddr, sizeof(recvAddr));
+                        data->S_num.s_b2 += 1;
+                        memcpy(data->data, Packet+1452, PacketSize-1452);
+                        len = sendto(server_socket, (char*)data, PacketSize - 1452 + 20, NULL, (sockaddr*)&recvAddr, sizeof(recvAddr));
                         if (len != -1) {
-                            data->S_un.S_un_b.s_b1 += 1;
                             PrintPacket(Packet, PacketSize);
+                            data->S_num.s_b1 += 1;
                         }
-                        else {
+                        else
+                        {
                             Log(WINTUN_LOG_ERR, L"send data failed");
                             DWORD LastError = GetLastError();
                             LogError(L"Packet check failed", LastError);
@@ -309,10 +337,10 @@ ReceivePackets(_Inout_ DWORD_PTR SessionPtr)
                 }
                 else {
                     memcpy(data->data, Packet, PacketSize);
-                    len = sendto(server_socket, (char*)data, PacketSize + 21, NULL, (sockaddr*)&recvAddr, sizeof(recvAddr));
+                    len = sendto(server_socket, (char*)data, PacketSize + 20, NULL, (sockaddr*)&recvAddr, sizeof(recvAddr));
                     if (len != -1) {
                         PrintPacket(Packet, PacketSize);
-                        data->S_un.S_un_b.s_b1 += 1;
+                        data->S_num.s_b1 += 1;
                     }
                     else
                     {
@@ -360,15 +388,14 @@ SendPackets(_Inout_ DWORD_PTR SessionPtr)
     int len = 0;
     while (!HaveQuit)
     {
-        len = recvfrom(server_socket, (char*)data, 0x10000, NULL, (sockaddr*)&recvAddr, &sock_len);
+        len = recvfrom(server_socket, (char*)data, 1472, NULL, (sockaddr*)&recvAddr, &sock_len);
         if (len == -1) {
             Log(WINTUN_LOG_ERR, L"recv data failed");
             continue;
         }
-        if (len > 65515)
+        if (len > 1472)
         {
-            Log(WINTUN_LOG_WARN, L"真的有超过65515的包！！！");
-
+            Log(WINTUN_LOG_WARN, L"真的有超过 1472 的包！！！");
             //BYTE* Packet = WintunAllocateSendPacket(Session, 0x10000);
             //if (Packet)
             //{
@@ -395,20 +422,36 @@ SendPackets(_Inout_ DWORD_PTR SessionPtr)
         else {
             if (len == 2 && *(((char*)data)+1) == '\x00' && *(char*)data >= '0' && *(char*)data <= '9')
             {
-                Log(WINTUN_LOG_INFO, L"this is a heart"); continue;
+                //Log(WINTUN_LOG_INFO, L"this is a heart");
+                continue;
             }
-            BYTE* Packet = WintunAllocateSendPacket(Session, len);
+            BYTE* Packet = WintunAllocateSendPacket(Session, data->len);
             if (Packet)
             {
-                //MakeICMP(Packet);
-                memset(Packet, 0, len);
-                memcpy(Packet, data->data, len);
-                //len = recvfrom(server_socket, (char*)data, 0x10000, NULL, (sockaddr*)&recvAddr, &sock_len);
-                //if (len == -1) {
-                //    Log(WINTUN_LOG_ERR, L"recv data failed");
-                //    continue;
-                //}
-                WintunSendPacket(Session, Packet);
+                memset(Packet, 0, data->len);
+                if (data->len > 1452)
+                {
+                    //MakeICMP(Packet);
+                    memcpy(Packet, data->data, 1452);
+                    //len = recvfrom(server_socket, (char*)data, 0x10000, NULL, (sockaddr*)&recvAddr, &sock_len);
+                    //if (len == -1) {
+                    //    Log(WINTUN_LOG_ERR, L"recv data failed");
+                    //    continue;
+                    //}
+                    WintunSendPacket(Session, Packet);
+                }
+                else {
+                    //MakeICMP(Packet);
+                    memcpy(Packet, data->data, data->len);
+                    PrintPacket(Packet, data->len);
+                    //len = recvfrom(server_socket, (char*)data, 0x10000, NULL, (sockaddr*)&recvAddr, &sock_len);
+                    //if (len == -1) {
+                    //    Log(WINTUN_LOG_ERR, L"recv data failed");
+                    //    continue;
+                    //}
+                    WintunSendPacket(Session, Packet);
+                }
+
             }
             else if (GetLastError() != ERROR_BUFFER_OVERFLOW)
                 return LogLastError(L"Packet write failed");
@@ -640,9 +683,9 @@ int __cdecl main(int argc, char** argv)
         return LogError(L"buffer create failed\n", WSAGetLastError());
     }
     memset(buff, 0, 0x10000);
-    memcpy(buff, "000000000000\x01\x00\x00\x00\x00\x00\x00\x00\x00", 22);
+    memcpy(buff, "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00", 20);
     Log(WINTUN_LOG_INFO, L"try connect server...");
-    if (-1 == sendto(server_socket, buff, 21, NULL, (sockaddr*)&recvAddr, sizeof(recvAddr))){
+    if (-1 == sendto(server_socket, buff, 20, NULL, (sockaddr*)&recvAddr, sizeof(recvAddr))){
         xibai_exit(4, server_socket, Adapter, Wintun);
         //WSACleanup();
         //closesocket(server_socket);
@@ -654,7 +697,7 @@ int __cdecl main(int argc, char** argv)
         //FreeLibrary(Wintun);
         return LogError(L"sendto failed with error: %d\n", WSAGetLastError());
     }
-    int len = recvfrom(server_socket, buff, 0x10000, NULL, (sockaddr*)&recvAddr, &sock_len);
+    int len = recvfrom(server_socket, buff, 0x1500, NULL, (sockaddr*)&recvAddr, &sock_len);
     if (len == -1) {
         xibai_exit(4, server_socket, Adapter, Wintun);
         //WSACleanup();

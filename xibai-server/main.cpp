@@ -37,7 +37,7 @@ int main()
     }
     printf("socket already created\n");
 
-    sockaddr_in RecvAddr;
+    sockaddr_in RecvAddr = { 0 };
     RecvAddr.sin_family = AF_INET;
     RecvAddr.sin_port = htons(50001);
     RecvAddr.sin_addr.s_addr = getIP();
@@ -51,18 +51,18 @@ int main()
     }
     printf("socket already binded\n");
 
-    xibai_data *buff = (xibai_data*)malloc(0x10000);
+    xibai_data *buff = (xibai_data*)malloc(1500);
     int len = 0;
 
     sockaddr_in target_addr = { 0 };
     socklen_t ta_len = sizeof(sockaddr_in);
     while (1) {
-        len = recvfrom(server_fd, buff, 0x10000, NULL, (sockaddr*)&target_addr, (socklen_t*)&ta_len);
+        len = recvfrom(server_fd, buff, 1500, NULL, (sockaddr*)&target_addr, (socklen_t*)&ta_len);
         if (len == -1) {
             printf("recvfrom error\n");
             log("recvfrom error\n");
         }
-        else if (len < 0x10000 && len > 0) {
+        else if (len < 1472 && len > 0) {
             printf("recv success: %d\n", len);
             switch (buff->flag)
             {
@@ -75,8 +75,8 @@ int main()
                     target_list[currentNum].real_target = target_addr;
                     target_list[currentNum].realt_len = ta_len;
                     target_list[currentNum].flag = 1;
-                    ++currentNum;
                     printf("client add. real ip: %s, xibai ip: 192.168.222.%d\n", inet_ntoa(target_addr.sin_addr),currentNum);
+                    ++currentNum;
                 }
                 else {
                     printf("fork failed %d", currentNum);
@@ -91,17 +91,26 @@ int main()
                     log(message);
                 }
                 else {
-                    len = sendto(server_fd, buff, len, NULL, (sockaddr*)&(target_list[((char*)buff)[9]].real_target), target_list[((char*)buff)[9]].realt_len);
-                    if (len == -1)
+                    for (size_t i = 0; i < NUM; i++)
                     {
-                        printf("send error: %s\n", inet_ntoa(buff->dst_target.addr));
-                        log("send error\n");
+                        xibai_ready target = target_list[i];
+                        if (target.flag)
+                        {
+                            if ((i & ntohl(buff->dst_target.addr.s_addr)) == i)
+                            {
+                                len = sendto(server_fd, buff, len, NULL, (sockaddr*)&(target.real_target), target.realt_len);
+                                if (len == -1)
+                                {
+                                    printf("send error: %s\n", inet_ntoa(buff->dst_target.addr));
+                                    log("send error\n");
+                                }
+                                printf("send %s success: %d\n", inet_ntoa(buff->dst_target.addr), len);
+                            }
+                        }
                     }
-                    printf("send success: %d\n", len);
                 }
-
                 break;
-            case 3:
+            case 3:         //exit
                 break;
             default:
                 break;
