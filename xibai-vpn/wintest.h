@@ -46,7 +46,6 @@ struct xibai_data
     xibai_target dst_target;
     unsigned char flag;
     struct { USHORT s_b1;UCHAR s_b2; } S_num;
-
     unsigned int len;
     unsigned char data[1452];
 };
@@ -58,3 +57,12 @@ struct xibai_ready
     socklen_t realt_len;
     char flag;
 };
+
+#pragma pack(1)
+struct packet_node
+{
+    char flag;
+    BYTE* packet_data;
+};
+
+packet_node packet_list[0x10000] = { 0 };

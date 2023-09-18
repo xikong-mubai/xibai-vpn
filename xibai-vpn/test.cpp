@@ -432,13 +432,27 @@ SendPackets(_Inout_ DWORD_PTR SessionPtr)
                 if (data->len > 1452)
                 {
                     //MakeICMP(Packet);
-                    memcpy(Packet, data->data, 1452);
+                    packet_list[data->S_num.s_b1].flag += 1;
+                    packet_list[data->S_num.s_b1].packet_data = Packet;
+                    if (data->S_num.s_b2 == 0)
+                    {
+                        memcpy(Packet, data->data, 1452);
+                    }
+                    else
+                    {
+                        memcpy(Packet + 1452, data->data, data->len - 1452);
+                    }
+                    if (packet_list[data->S_num.s_b1].flag == 2)
+                    {
+                        WintunSendPacket(Session, Packet);
+                        packet_list[data->S_num.s_b1].flag == 0;
+                        packet_list[data->S_num.s_b1].packet_data == NULL;
+                    }
                     //len = recvfrom(server_socket, (char*)data, 0x10000, NULL, (sockaddr*)&recvAddr, &sock_len);
                     //if (len == -1) {
                     //    Log(WINTUN_LOG_ERR, L"recv data failed");
                     //    continue;
                     //}
-                    WintunSendPacket(Session, Packet);
                 }
                 else {
                     //MakeICMP(Packet);

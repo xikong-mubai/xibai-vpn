@@ -33,7 +33,8 @@ int log(char* message) {
 }
 
 // 每个客户端连接由一个新的子进程维持，对应的连接编号为 num
-int heart(int server_fd, sockaddr_in target_addr, int num);
+int heart(int server_fd, sockaddr_in target_addr, char num);
+void stop();
 
 // 获取网卡ip
 in_addr_t getIP()
@@ -51,7 +52,7 @@ in_addr_t getIP()
     {
         if (ifa->ifa_addr->sa_family == AF_INET)
         {
-            if (ifa->ifa_name == "eth0" || ifa->ifa_name == "ens32")
+            if (!strcmp(ifa->ifa_name, "eth0") || !strcmp(ifa->ifa_name, "ens32"))
             {
                 sin = (struct sockaddr_in*)ifa->ifa_addr;
                 printf("ipAddress: %s, interfaceName: %s\n", inet_ntoa(sin->sin_addr), ifa->ifa_name);
@@ -109,4 +110,4 @@ struct xibai_ready
 int udp_len = 0;
 struct xibai_ready target_list[NUM] = { 0 };
 int fork_pid[NUM] = { 0 };
-int currentNum = 1;      //当前ip数量
+char currentNum = 1;      //当前ip数量

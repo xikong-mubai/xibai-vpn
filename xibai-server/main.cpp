@@ -1,6 +1,6 @@
 ﻿#include "main.h"
 
-int heart(int server_fd,sockaddr_in target_addr,int num) {
+int heart(int server_fd,sockaddr_in target_addr,char num) {
     int flag = fork();
     char message[3] = "0\x00";
     message[0] = '0' + num;
@@ -27,8 +27,13 @@ int heart(int server_fd,sockaddr_in target_addr,int num) {
     }
 }
 
+void stop(int sign) {
+    exit(0);
+}
+
 int main()
 {
+    signal(SIGINT, stop);
     int server_fd = socket(AF_INET, SOCK_DGRAM, 0);
     if (server_fd == -1)
     {
@@ -86,8 +91,8 @@ int main()
                 udp_len = ((xibai_data*)buff)->len;
                 if (udp_len > len) {
                     char* message = (char*)malloc(1024);
-                    sprintf(message, "client udp length is exception ( %d ) !!! maybe is error!!!\n", len);
-                    printf(message);
+                    sprintf(message, "client udp length is exception ( %d ) !!! maybe is error!!!", len);
+                    printf("%s\n", message);
                     log(message);
                 }
                 else {
@@ -104,7 +109,7 @@ int main()
                                     printf("send error: %s\n", inet_ntoa(buff->dst_target.addr));
                                     log("send error\n");
                                 }
-                                printf("send %s success: %d\n", inet_ntoa(buff->dst_target.addr), len);
+                                printf("send %d bytes success: %s -> %s\n", len, inet_ntoa(buff->dst_target.addr), inet_ntoa(target.real_target.sin_addr));
                             }
                         }
                     }
@@ -124,8 +129,8 @@ int main()
         else
         {
             char* message = (char*)malloc(1024);
-            sprintf(message, "vpn udp length is exception ( %d ) !!! maybe is error!!!\n", len);
-            printf(message);
+            sprintf(message, "vpn udp length is exception ( %d ) !!! maybe is error!!!", len);
+            printf("%s\n", message);
             log(message);
         }
         bzero(buff, 0x10000);
