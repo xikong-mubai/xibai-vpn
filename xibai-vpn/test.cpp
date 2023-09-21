@@ -445,8 +445,8 @@ SendPackets(_Inout_ DWORD_PTR SessionPtr)
                     if (packet_list[data->S_num.s_b1].flag == 2)
                     {
                         WintunSendPacket(Session, Packet);
-                        packet_list[data->S_num.s_b1].flag == 0;
-                        packet_list[data->S_num.s_b1].packet_data == NULL;
+                        packet_list[data->S_num.s_b1].flag = 0;
+                        packet_list[data->S_num.s_b1].packet_data = NULL;
                     }
                     //len = recvfrom(server_socket, (char*)data, 0x10000, NULL, (sockaddr*)&recvAddr, &sock_len);
                     //if (len == -1) {
@@ -480,6 +480,11 @@ SendPackets(_Inout_ DWORD_PTR SessionPtr)
         }
 
     }
+    return ERROR_SUCCESS;
+}
+
+static DWORD WINAPI
+Heart(_Inout_ xibai_data* sendBuff) {
     return ERROR_SUCCESS;
 }
 
@@ -684,23 +689,9 @@ int __cdecl main(int argc, char** argv)
     recvAddr.sin_port = htons(50001);
     //RecvAddr.sin_addr.s_addr = inet_addr("255.255.255.254");
     recvAddr.sin_addr.s_addr = sockaddr_ipv4->sin_addr.S_un.S_addr;
-    char* buff = (char*)malloc(0x10000);
-    if (!buff){
-        xibai_exit(4, server_socket, Adapter, Wintun);
-        //WSACleanup();
-        //closesocket(server_socket);
-        //WintunCloseAdapter(Adapter);
-        //    cleanupQuit:
-        //SetConsoleCtrlHandler(CtrlHandler, FALSE);
-        //CloseHandle(QuitEvent);
-        //    cleanupWintun:
-        //FreeLibrary(Wintun);
-        return LogError(L"buffer create failed\n", WSAGetLastError());
-    }
-    memset(buff, 0, 0x10000);
-    memcpy(buff, "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00", 20);
+    memcpy(sendBuff, "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00", 20);
     Log(WINTUN_LOG_INFO, L"try connect server...");
-    if (-1 == sendto(server_socket, buff, 20, NULL, (sockaddr*)&recvAddr, sizeof(recvAddr))){
+    if (-1 == sendto(server_socket, (char*)sendBuff, 20, NULL, (sockaddr*)&recvAddr, sizeof(recvAddr))){
         xibai_exit(4, server_socket, Adapter, Wintun);
         //WSACleanup();
         //closesocket(server_socket);
@@ -712,7 +703,7 @@ int __cdecl main(int argc, char** argv)
         //FreeLibrary(Wintun);
         return LogError(L"sendto failed with error: %d\n", WSAGetLastError());
     }
-    int len = recvfrom(server_socket, buff, 0x1500, NULL, (sockaddr*)&recvAddr, &sock_len);
+    int len = recvfrom(server_socket, (char*)recvBuff, 1500, NULL, (sockaddr*)&recvAddr, &sock_len);
     if (len == -1) {
         xibai_exit(4, server_socket, Adapter, Wintun);
         //WSACleanup();
@@ -725,7 +716,7 @@ int __cdecl main(int argc, char** argv)
         //FreeLibrary(Wintun);
         return LogError(L"recvfrom error: %d\n", WSAGetLastError());
     }
-    if (buff[0] < '1' || buff[0] > '9')
+    if (*(char*)recvBuff < '1' || *(char*)recvBuff > '9')
     {
         xibai_exit(4, server_socket, Adapter, Wintun);
         //WSACleanup();
@@ -747,7 +738,8 @@ int __cdecl main(int argc, char** argv)
     InitializeUnicastIpAddressEntry(&AddressRow);
     WintunGetAdapterLUID(Adapter, &AddressRow.InterfaceLuid);
     AddressRow.Address.Ipv4.sin_family = AF_INET;
-    AddressRow.Address.Ipv4.sin_addr.S_un.S_addr = htonl((192 << 24) | (168 << 16) | (222 << 8) | (atoi(buff) << 0)); /* 192.168.222.client */
+    AddressRow.Address.Ipv4.sin_addr.S_un.S_addr = htonl((192 << 24) | (168 << 16) | (222 << 8) | (atoi((char*)recvBuff) << 0)); /* 192.168.222.client */
+    sendBuff->src_target.addr.S_un.S_addr = AddressRow.Address.Ipv4.sin_addr.S_un.S_addr;
     //AddressRow.Address.Ipv4.sin_addr.S_un.S_addr = sockaddr_ipv4->sin_addr.S_un.S_addr; /* 10.6.7.7 */
     AddressRow.OnLinkPrefixLength = 24; /* This is a /24 network */
     AddressRow.DadState = IpDadStatePreferred;
@@ -787,8 +779,9 @@ int __cdecl main(int argc, char** argv)
 
     Log(WINTUN_LOG_INFO, L"Launching threads and mangling packets...");
 
-    HANDLE Workers[] = { CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)ReceivePackets, (LPVOID)Session, 0, NULL),
-                         CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)SendPackets, (LPVOID)Session, 0, NULL) };
+    HANDLE Workers[3] = { CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)ReceivePackets, (LPVOID)Session, 0, NULL),
+                         CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)SendPackets, (LPVOID)Session, 0, NULL),
+                         CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)Heart,(LPVOID)sendBuff,0,NULL) };
     if (!Workers[0] || !Workers[1])
     {
         LastError = LogError(L"Failed to create threads", GetLastError());
