@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <signal.h>
 #include <unistd.h>
+#include <errno.h> 
 
 #include <sys/socket.h>
 #include <netinet/udp.h>
@@ -19,22 +20,40 @@
 //最多允许的客户端数量
 #define NUM 10
 
+struct timeval te;
+struct tm* pTempTm;
+FILE* log_fp = fopen("xibai_log", "a+");
+
+char* get_stime(void)
+{
+    static char timestr[200] = { 0 };
+    gettimeofday(&te, NULL);
+    pTempTm = localtime(&te.tv_sec);
+    if (NULL != pTempTm)
+    {
+        snprintf(timestr, 199, "%04d-%02d-%02d %02d:%02d:%02d.%03ld",
+            pTempTm->tm_year + 1900,
+            pTempTm->tm_mon + 1,
+            pTempTm->tm_mday,
+            pTempTm->tm_hour,
+            pTempTm->tm_min,
+            pTempTm->tm_sec,
+            te.tv_usec / 1000);
+    }
+    return timestr;
+}
 
 // 消息日志
-int log(char* message) {
-    FILE* log_fp = fopen("xibai_log", "a+");
-    struct timeval te;
+void log(char* message) {
     gettimeofday(&te, NULL);
     fputs(ctime((const time_t*)&te.tv_sec), log_fp);
     fputs("        ", log_fp);
     fputs(message, log_fp);
-    fclose(log_fp);
-    return 0;
 }
 
 // 每个客户端连接由一个新的子进程维持，对应的连接编号为 num
 int heart(int server_fd, sockaddr_in target_addr, char num);
-void stop();
+void stop(int sign);
 
 // 获取网卡ip
 in_addr_t getIP()

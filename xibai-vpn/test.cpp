@@ -365,7 +365,7 @@ ReceivePackets(_Inout_ DWORD_PTR SessionPtr)
                     continue;
                 return ERROR_SUCCESS;
             default:
-                LogError(L"Packet check failed", LastError);
+                LogError(L"recvPacket create failed", LastError);
                 return LastError;
             }
         }
@@ -468,13 +468,14 @@ SendPackets(_Inout_ DWORD_PTR SessionPtr)
 
             }
             else if (GetLastError() != ERROR_BUFFER_OVERFLOW)
-                return LogLastError(L"Packet write failed");
-
-            switch (WaitForSingleObject(QuitEvent, 1000 /* 1 second */))
-            {
-            case WAIT_ABANDONED:
-            case WAIT_OBJECT_0:
-                return ERROR_SUCCESS;
+                return LogLastError(L"sendPacket create failed");
+            else {
+                switch (WaitForSingleObject(QuitEvent, 1000 /* 1 second */))
+                {
+                case WAIT_ABANDONED:
+                case WAIT_OBJECT_0:
+                    return ERROR_SUCCESS;
+                }
             }
         }
 
