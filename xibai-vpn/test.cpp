@@ -444,6 +444,7 @@ SendPackets(_Inout_ DWORD_PTR SessionPtr)
                     }
                     if (packet_list[data->S_num.s_b1].flag == 2)
                     {
+                        PrintPacket(Packet, data->len);
                         WintunSendPacket(Session, Packet);
                         packet_list[data->S_num.s_b1].flag = 0;
                         packet_list[data->S_num.s_b1].packet_data = NULL;
