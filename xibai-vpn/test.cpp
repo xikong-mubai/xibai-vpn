@@ -486,6 +486,28 @@ SendPackets(_Inout_ DWORD_PTR SessionPtr)
 
 static DWORD WINAPI
 Heart(_Inout_ xibai_data* sendBuff) {
+    char* buff = (char*)malloc(20);
+    while (1)
+    {
+        if (!buff)
+        {
+            Log(WINTUN_LOG_WARN, L"HeartBuff create failed");
+            buff = (char*)malloc(sizeof(xibai_data));
+        }
+        else
+        {
+            break;
+        }
+    }
+    Log(WINTUN_LOG_ERR, L"HeartBuff create failed");
+    memcpy(buff, sendBuff, 4);
+    memcpy(buff+4, "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00", 16);
+    int len = 0;
+    while (!HaveQuit)
+    {
+        len = sendto(server_socket, (char*)buff, 20, NULL, (sockaddr*)&recvAddr, sizeof(recvAddr));
+    }
+
     return ERROR_SUCCESS;
 }
 
@@ -717,7 +739,7 @@ int __cdecl main(int argc, char** argv)
         //FreeLibrary(Wintun);
         return LogError(L"recvfrom error: %d\n", WSAGetLastError());
     }
-    if (*(char*)recvBuff < '1' || *(char*)recvBuff > '9')
+    if (*(char*)recvBuff < 1 || *(char*)recvBuff > 9)
     {
         xibai_exit(4, server_socket, Adapter, Wintun);
         //WSACleanup();
@@ -739,7 +761,7 @@ int __cdecl main(int argc, char** argv)
     InitializeUnicastIpAddressEntry(&AddressRow);
     WintunGetAdapterLUID(Adapter, &AddressRow.InterfaceLuid);
     AddressRow.Address.Ipv4.sin_family = AF_INET;
-    AddressRow.Address.Ipv4.sin_addr.S_un.S_addr = htonl((192 << 24) | (168 << 16) | (222 << 8) | (atoi((char*)recvBuff) << 0)); /* 192.168.222.client */
+    AddressRow.Address.Ipv4.sin_addr.S_un.S_addr = htonl((192 << 24) | (168 << 16) | (222 << 8) | (*(char*)recvBuff) << 0); /* 192.168.222.client */
     sendBuff->src_target.addr.S_un.S_addr = AddressRow.Address.Ipv4.sin_addr.S_un.S_addr;
     //AddressRow.Address.Ipv4.sin_addr.S_un.S_addr = sockaddr_ipv4->sin_addr.S_un.S_addr; /* 10.6.7.7 */
     AddressRow.OnLinkPrefixLength = 24; /* This is a /24 network */
@@ -759,7 +781,19 @@ int __cdecl main(int argc, char** argv)
 
         LogError(L"Failed to set IP address", LastError);
         return LastError;
-    }Log(WINTUN_LOG_INFO, L"配置成功");
+    }if (-1 == sendto(server_socket, "success", 8, NULL, (sockaddr*)&recvAddr, sizeof(recvAddr))) {
+        xibai_exit(4, server_socket, Adapter, Wintun);
+        //WSACleanup();
+        //closesocket(server_socket);
+        //WintunCloseAdapter(Adapter);
+        //    cleanupQuit:
+        //SetConsoleCtrlHandler(CtrlHandler, FALSE);
+        //CloseHandle(QuitEvent);
+        //    cleanupWintun:
+        //FreeLibrary(Wintun);
+        return LogError(L"sendto failed with error: %d\n", WSAGetLastError());
+    }
+    Log(WINTUN_LOG_INFO, L"配置成功");
 
     WINTUN_SESSION_HANDLE Session = WintunStartSession(Adapter, 0x400000);
     if (!Session)

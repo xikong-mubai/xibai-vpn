@@ -129,4 +129,5 @@ struct xibai_ready
 int udp_len = 0;
 struct xibai_ready target_list[NUM] = { 0 };
 int fork_pid[NUM] = { 0 };
+int pipe_fd[10][2] = { 0 };
 char currentNum = 1;      //当前ip数量

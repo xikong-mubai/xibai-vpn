@@ -49,7 +49,7 @@ struct xibai_data
     unsigned int len;
     unsigned char data[1452];
 } *recvBuff = (xibai_data*)malloc(sizeof(xibai_data)),
-* sendBuff = (xibai_data*)malloc(sizeof(xibai_data));
+*sendBuff = (xibai_data*)malloc(sizeof(xibai_data));
 
 #pragma pack(1)
 struct xibai_ready
