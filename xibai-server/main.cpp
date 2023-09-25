@@ -1,6 +1,6 @@
 ﻿#include "main.h"
 
-int init(int server_fd[], sockaddr_in target_addr, char num) {
+int init(int server_fd[], sockaddr_in target_addr, int num) {
     int flag = fork();
     char message[3] = "\x00\x00",recv_message[10] = "";
     message[0] = '\x00' + num;
@@ -30,7 +30,7 @@ int init(int server_fd[], sockaddr_in target_addr, char num) {
                 printf("init message sen failed\n");
             }
             len = sizeof(target_addr);
-            len = recvfrom(server_fd[1], recv_message, 9, NULL, (sockaddr*)&target_addr, (socklen_t*)&len);
+            len = recvfrom(server_fd[1], recv_message, 8, NULL, (sockaddr*)&target_addr, (socklen_t*)&len);
             if (len == -1)
             {
                 log("init message recv failed\n");
@@ -48,7 +48,7 @@ int init(int server_fd[], sockaddr_in target_addr, char num) {
     }
 }
 int heart(int server_fd, sockaddr_in target_addr, char num) {
-    int parent = getppid(),index = 0;
+    int parent = getppid(),child_index = 0;
     char message[20] = "heart", recv_message[20] = "";
     sockaddr_in tmp_target_addr = { 0 };
     int len = 0;
@@ -61,19 +61,18 @@ int heart(int server_fd, sockaddr_in target_addr, char num) {
             log("heart message recv failed\n");
             printf("heart message recv failed\n");
         }
-        index = recv_message[4];
-        if (target_list[index].real_target.sin_addr.s_addr != tmp_target_addr.sin_addr.s_addr  || target_list[index].real_target.sin_port != tmp_target_addr.sin_port)
+        child_index = recv_message[3];
+        printf("12123  %d\n", child_index);//////////////////////////////////////////
+        if (target_list[child_index].real_target.sin_addr.s_addr != tmp_target_addr.sin_addr.s_addr  || target_list[child_index].real_target.sin_port != tmp_target_addr.sin_port)
         {
-            target_list[index].real_target = tmp_target_addr;
-            while (-1 == write(pipe_fd[index][1], &tmp_target_addr, sizeof(target_addr))) {
+            target_list[child_index].real_target = tmp_target_addr;
+            while (-1 == write(pipe_fd[child_index][1], &tmp_target_addr, sizeof(target_addr))) {
 
             }
-            kill(parent, index + 23332);
+            kill(parent, child_index + 23332);
         }
 
-
         len = sendto(server_fd, message, 5, NULL, (sockaddr*)&tmp_target_addr, (socklen_t)sizeof(target_addr));
-        printf("heart\n");
         if (len == -1)
         {
             log("heart message recv failed\n");
@@ -94,7 +93,7 @@ void stop(int sign) {
     exit(0);
 }
 void update(int sign) {
-    sockaddr_in *tmp = (sockaddr_in*)malloc(sizeof(sockaddr_in));
+    sockaddr_in *tmp = (sockaddr_in*)malloc(sizeof(sockaddr_in)+10);
     char message[100] = "";
     int tmp_sign = sign - 23332;
     while(-1 == read(pipe_fd[tmp_sign][0], tmp, sizeof(sockaddr_in))) {
@@ -102,16 +101,16 @@ void update(int sign) {
         log(message);
         printf("%s", message);
     }
+    target_list[tmp_sign].real_target = *tmp;
     for (size_t i = 1; i < 10; i++)
     {
         if (i != tmp_sign) {
-            while (-1 == write(pipe_fd[i][1], &tmp, sizeof(sockaddr_in)))
+            while (-1 == write(pipe_fd[i][1], &tmp, sizeof(sockaddr_in)+10))
             {
             }
             kill(fork_pid[i], sign);
         }
     }
-    target_list[tmp_sign].real_target = *tmp;
 }
 
 int main()
@@ -119,9 +118,9 @@ int main()
     signal(SIGINT, stop);
     signal(SIGQUIT, stop);
     signal(SIGKILL, stop);
-    for (size_t i = 0; i < 10; i++)
+    for (int i = 1; i < 10; i++)
     {
-        signal(23333+i, update);
+        signal(23332+i, update);
     }
     for (size_t i = 0; i < 10; i++)
     {
@@ -166,7 +165,7 @@ int main()
         close(server_fd[2]);
         exit(0);
     }
-    printf("heart socket already binded\n");
+    printf("init socket already binded\n");
 
     // 绑定心跳重连服务监听
     RecvAddr.sin_port = htons(50003);
@@ -184,7 +183,7 @@ int main()
     printf("heart socket already binded\n");
 
     xibai_data *buff = (xibai_data*)malloc(2000);
-    int len = 0;
+    int len = 0, src_ip_index = 0, dst_ip_index = 0;
 
     sockaddr_in target_addr = { 0 }; xibai_ready target = { 0 };
     socklen_t ta_len = sizeof(sockaddr_in);
@@ -228,7 +227,9 @@ int main()
 
                 break;
             case 2:         // data
-                udp_len = ((xibai_data*)buff)->len;
+                udp_len = buff->len;
+                src_ip_index = (buff->src_target.addr.s_addr >> 24);
+                dst_ip_index = (buff->dst_target.addr.s_addr >> 24);
                 if (udp_len > len) {
                     char* message = (char*)malloc(1024);
                     sprintf(message, "client udp length is exception ( %d ) !!! maybe is error!!!", len);
@@ -236,23 +237,43 @@ int main()
                     log(message);
                 }
                 else {
-                    for (size_t i = 1; i < NUM; i++)
+                    if (dst_ip_index == 255)
                     {
-                        target = target_list[i];
-                        if (target.flag)//&& target_addr.sin_addr.s_addr != target.real_target.sin_addr.s_addr)
+                        for (size_t i = 1; i < NUM; i++)
                         {
-                            if ((i & ntohl(buff->dst_target.addr.s_addr)) == i && i != (ntohl(buff->src_target.addr.s_addr) % 256))
+                            target = target_list[i];
+                            if (target.flag)//&& target_addr.sin_addr.s_addr != target.real_target.sin_addr.s_addr)
                             {
-                                len = sendto(server_fd[0], buff, len, NULL, (sockaddr*)&(target.real_target), target.realt_len);
-                                if (len == -1)
+                                if (i != src_ip_index)
                                 {
-                                    printf("send error: %s\n", inet_ntoa(buff->dst_target.addr));
-                                    log("send error\n");
+                                    len = sendto(server_fd[0], buff, len, NULL, (sockaddr*)&(target.real_target), target.realt_len);
+                                    if (len == -1)
+                                    {
+                                        printf("send error: %s\n", inet_ntoa(buff->dst_target.addr));
+                                        log("send error\n");
+                                    }
+                                    printf("send %d bytes success: %s(%s:%d) -> %s(%s:%d)\n", len, inet_ntoa(buff->src_target.addr), inet_ntoa(target_addr.sin_addr), ntohs(target_addr.sin_port), inet_ntoa(buff->dst_target.addr), inet_ntoa(target.real_target.sin_addr), ntohs(target.real_target.sin_port));
                                 }
-                                printf("send %d bytes success: %s(%s:%d) -> %s(%s:%d)\n", len, inet_ntoa(buff->src_target.addr),inet_ntoa(target_addr.sin_addr),ntohs(target_addr.sin_port), inet_ntoa(buff->dst_target.addr), inet_ntoa(target.real_target.sin_addr),ntohs(target.real_target.sin_port));
                             }
                         }
                     }
+                    else if (dst_ip_index >= NUM)
+                    {
+                        printf("unkown server, dst_ip: %s\n", inet_ntoa(buff->dst_target.addr));
+                    }
+                    else
+                    {
+                        target = target_list[dst_ip_index];
+                        len = sendto(server_fd[0], buff, len, NULL, (sockaddr*)&(target.real_target), target.realt_len);
+                        if (len == -1)
+                        {
+                            printf("send error: %s\n", inet_ntoa(buff->dst_target.addr));
+                            log("send error\n");
+                        }
+                        printf("send %d bytes success: %s(%s:%d) -> %s(%s:%d)\n", len, inet_ntoa(buff->src_target.addr), inet_ntoa(target_addr.sin_addr), ntohs(target_addr.sin_port), inet_ntoa(buff->dst_target.addr), inet_ntoa(target.real_target.sin_addr), ntohs(target.real_target.sin_port));
+
+                    }
+
                 }
                 break;
             case 3:         //exit
