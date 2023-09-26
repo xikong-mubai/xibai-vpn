@@ -1,83 +1,77 @@
 ﻿#include "main.h"
 
 int init(int server_fd[], sockaddr_in target_addr, int num) {
-    int flag = fork();
-    char message[3] = "\x00\x00",recv_message[10] = "";
+    char message[3] = "\x00\x00", recv_message[10] = "";
     message[0] = '\x00' + num;
     int len = 0;
+    if (num >= NUM)
+    {
+        while (-1 == sendto(server_fd[0], "client's number is max!\n", 24, NULL, (sockaddr*)&target_addr, (socklen_t)sizeof(target_addr))) {
+            log("client's number is max, but send failed\n");
+            printf("client's number is max, but send failed\n");
+        }
+        return 0;
+    }
+    while (-1 == sendto(server_fd[0], message, 2, NULL, (sockaddr*)&target_addr, (socklen_t)sizeof(target_addr))) {
+        log("init message send failed\n");
+        printf("init message send failed\n");
+    }
+    printf("init\n");
+    len = sizeof(target_addr);
+    len = recvfrom(server_fd[1], recv_message, 8, NULL, (sockaddr*)&target_addr, (socklen_t*)&len);
+    if (len == -1)
+    {
+        log("init message recv failed\n");
+        printf("init message recv failed\n");
+        return 0;
+    }
+    if (!memcmp(recv_message, "success", 7))
+    {
+        //heart(server_fd[2], target_addr, num);
+        return 1;
+    }
+    return 0;
+}
+
+
+int heart(int server_fd, sockaddr_in target_addr, char num) {
+    int flag = fork(), len = 0, child_index = 0;
+    char recv_message[1500] = "";
+    sockaddr_in tmp_target_addr = { 0 };
     switch (flag)
     {
     case -1:
         return -1;
     case 0:                 // 子进程
-        if (num >= NUM)
-        {
-            len = sendto(server_fd[1], "client's number is max!\n", 24, NULL, (sockaddr*)&target_addr, (socklen_t)sizeof(target_addr));
-            if (len == -1)
-            {
-                log("client's number is max, but send failed\n");
-                printf("client's number is max, but send failed\n");
-            }
-            return 0;
-        }
+        int parent = getppid();
         while (true)
         {
-            len = sendto(server_fd[1], message, 2, NULL, (sockaddr*)&target_addr, (socklen_t)sizeof(target_addr));
-            printf("init\n");
-            if (len == -1)
-            {
-                log("init message sen failed\n");
-                printf("init message sen failed\n");
-            }
             len = sizeof(target_addr);
-            len = recvfrom(server_fd[1], recv_message, 8, NULL, (sockaddr*)&target_addr, (socklen_t*)&len);
+            len = recvfrom(server_fd, recv_message, 20, NULL, (sockaddr*)&tmp_target_addr, (socklen_t*)&len);
             if (len == -1)
             {
-                log("init message recv failed\n");
-                printf("init message recv failed\n");
+                log("heart message recv failed\n");
+                printf("heart message recv failed\n");
+                continue;
             }
-            if (!memcmp(recv_message,"success",8))
+            child_index = recv_message[3];
+            printf("12123  %d\n", child_index);//////////////////////////////////////////
+            if (target_list[child_index].real_target.sin_addr.s_addr != tmp_target_addr.sin_addr.s_addr || target_list[child_index].real_target.sin_port != tmp_target_addr.sin_port)
             {
-                heart(server_fd[2], target_addr, num);
-                return 0;
+                target_list[child_index].real_target = tmp_target_addr;
+                while (-1 == write(pipe_fd[child_index][1], &tmp_target_addr, sizeof(target_addr))) {
+
+                }
+                kill(parent, child_index + 23332);
             }
-            sleep(2);
+            while (-1 == sendto(server_fd, recv_message, 20, NULL, (sockaddr*)&tmp_target_addr, (socklen_t)sizeof(target_addr))){
+                log("heart message recv failed\n");
+                printf("heart message recv failed\n");
+            }
         }
+        return 0;
     default:                // 父进程
         return flag;
-    }
-}
-int heart(int server_fd, sockaddr_in target_addr, char num) {
-    int parent = getppid(),child_index = 0;
-    char message[20] = "heart", recv_message[20] = "";
-    sockaddr_in tmp_target_addr = { 0 };
-    int len = 0;
-    while (true)
-    {
-        len = sizeof(target_addr);
-        len = recvfrom(server_fd, recv_message, 20, NULL, (sockaddr*)&tmp_target_addr, (socklen_t*)&len);
-        if (len == -1)
-        {
-            log("heart message recv failed\n");
-            printf("heart message recv failed\n");
-        }
-        child_index = recv_message[3];
-        printf("12123  %d\n", child_index);//////////////////////////////////////////
-        if (target_list[child_index].real_target.sin_addr.s_addr != tmp_target_addr.sin_addr.s_addr  || target_list[child_index].real_target.sin_port != tmp_target_addr.sin_port)
-        {
-            target_list[child_index].real_target = tmp_target_addr;
-            while (-1 == write(pipe_fd[child_index][1], &tmp_target_addr, sizeof(target_addr))) {
-
-            }
-            kill(parent, child_index + 23332);
-        }
-
-        len = sendto(server_fd, message, 5, NULL, (sockaddr*)&tmp_target_addr, (socklen_t)sizeof(target_addr));
-        if (len == -1)
-        {
-            log("heart message recv failed\n");
-            printf("heart message recv failed\n");
-        }
     }
 }
 
@@ -93,7 +87,7 @@ void stop(int sign) {
     exit(0);
 }
 void update(int sign) {
-    sockaddr_in *tmp = (sockaddr_in*)malloc(sizeof(sockaddr_in)+10);
+    sockaddr_in *tmp = (sockaddr_in*)malloc(sizeof(sockaddr_in));
     char message[100] = "";
     int tmp_sign = sign - 23332;
     while(-1 == read(pipe_fd[tmp_sign][0], tmp, sizeof(sockaddr_in))) {
@@ -105,8 +99,11 @@ void update(int sign) {
     for (size_t i = 1; i < 10; i++)
     {
         if (i != tmp_sign) {
-            while (-1 == write(pipe_fd[i][1], &tmp, sizeof(sockaddr_in)+10))
+            while (-1 == write(pipe_fd[i][1], &tmp, sizeof(sockaddr_in)))
             {
+                sprintf(message, "pipe_%d write failed\n", tmp_sign);
+                log(message);
+                printf("%s", message);
             }
             kill(fork_pid[i], sign);
         }
@@ -142,7 +139,7 @@ int main()
     if (-1 == bind(server_fd[0], (struct sockaddr*)&RecvAddr, sizeof(RecvAddr)))
     {
         char tmp[1024] = { 0 };
-        sprintf(tmp,"socket bind error: %d - %s\n", errno, strerror(errno));
+        sprintf(tmp,"main socket bind error: %d - %s\n", errno, strerror(errno));
         log(tmp);
         printf("%s", tmp);
         close(server_fd[0]);
@@ -157,7 +154,7 @@ int main()
     if (-1 == bind(server_fd[1], (struct sockaddr*)&RecvAddr, sizeof(RecvAddr)))
     {
         char tmp[1024] = { 0 };
-        sprintf(tmp, "socket bind error: %d - %s\n", errno, strerror(errno));
+        sprintf(tmp, "init socket bind error: %d - %s\n", errno, strerror(errno));
         log(tmp);
         printf("%s", tmp);
         close(server_fd[0]);
@@ -172,7 +169,7 @@ int main()
     if (-1 == bind(server_fd[2], (struct sockaddr*)&RecvAddr, sizeof(RecvAddr)))
     {
         char tmp[1024] = { 0 };
-        sprintf(tmp, "socket bind error: %d - %s\n", errno, strerror(errno));
+        sprintf(tmp, "heart socket bind error: %d - %s\n", errno, strerror(errno));
         log(tmp);
         printf("%s", tmp);
         close(server_fd[0]);
@@ -189,7 +186,7 @@ int main()
     socklen_t ta_len = sizeof(sockaddr_in);
     while (1) {
         //bzero((char*)buff, 1500);
-        len = recvfrom(server_fd[0], buff, 2000, NULL, (sockaddr*)&target_addr, (socklen_t*)&ta_len);
+        len = recvfrom(server_fd[0], buff, 1500, NULL, (sockaddr*)&target_addr, (socklen_t*)&ta_len);
         if (len == -1) {
             printf("recvfrom error\n");
             log("recvfrom error\n");
@@ -205,26 +202,26 @@ int main()
             case 1:         //  heart  and   init
                 if (buff->src_target.addr.s_addr == 0)
                 {
-                    fork_pid[currentNum] = init(server_fd, target_addr, currentNum);
-                    if (fork_pid[currentNum] == -1)
+                    target_list[currentNum].flag = init(server_fd, target_addr, currentNum);
+                    if (!target_list[currentNum].flag)
                     {
-                        log("client fork failed\n");
-                        printf("client fork failed\n");
+                        log("client connect failed\n");
+                        printf("client connect failed\n");
                         continue;
                     }
-                    else if (fork_pid[currentNum])    // 父进程
+                    else 
                     {
                         target_list[currentNum].real_target = target_addr;
                         target_list[currentNum].realt_len = ta_len;
-                        target_list[currentNum].flag = 1;
+                        fork_pid[currentNum] = heart(server_fd[2],target_addr,currentNum);
                         printf("client add. real ip:port -> %s:%d, xibai ip: 192.168.222.%d\n", inet_ntoa(target_addr.sin_addr), ntohs(target_addr.sin_port), currentNum);
                         ++currentNum;
                     }
-                    else {        // 子进程
-                        printf("client exited\n");
-                    }
                 }
-
+                else
+                {
+                    printf("???\n");
+                }
                 break;
             case 2:         // data
                 udp_len = buff->len;
@@ -246,8 +243,7 @@ int main()
                             {
                                 if (i != src_ip_index)
                                 {
-                                    len = sendto(server_fd[0], buff, len, NULL, (sockaddr*)&(target.real_target), target.realt_len);
-                                    if (len == -1)
+                                    while (-1 == sendto(server_fd[0], buff, len, NULL, (sockaddr*)&(target.real_target), target.realt_len))
                                     {
                                         printf("send error: %s\n", inet_ntoa(buff->dst_target.addr));
                                         log("send error\n");
@@ -264,16 +260,21 @@ int main()
                     else
                     {
                         target = target_list[dst_ip_index];
-                        len = sendto(server_fd[0], buff, len, NULL, (sockaddr*)&(target.real_target), target.realt_len);
-                        if (len == -1)
+                        while (-1 == sendto(server_fd[0], buff, len, NULL, (sockaddr*)&(target.real_target), target.realt_len))
                         {
                             printf("send error: %s\n", inet_ntoa(buff->dst_target.addr));
                             log("send error\n");
                         }
-                        printf("send %d bytes success: %s(%s:%d) -> %s(%s:%d)\n", len, inet_ntoa(buff->src_target.addr), inet_ntoa(target_addr.sin_addr), ntohs(target_addr.sin_port), inet_ntoa(buff->dst_target.addr), inet_ntoa(target.real_target.sin_addr), ntohs(target.real_target.sin_port));
-
+                        printf("send %d bytes success: %s(%s:%d) -> %s(%s:%d)\n", 
+                            len, 
+                            inet_ntoa(buff->src_target.addr), 
+                            inet_ntoa(target_addr.sin_addr), 
+                            ntohs(target_addr.sin_port), 
+                            inet_ntoa(buff->dst_target.addr), 
+                            inet_ntoa(target.real_target.sin_addr), 
+                            ntohs(target.real_target.sin_port)
+                        );
                     }
-
                 }
                 break;
             case 3:         //exit

@@ -258,7 +258,7 @@ ReceivePackets(_Inout_ DWORD_PTR SessionPtr)
 {
     WINTUN_SESSION_HANDLE Session = (WINTUN_SESSION_HANDLE)SessionPtr;
     HANDLE WaitHandles[] = { WintunGetReadWaitEvent(Session), QuitEvent };
-    xibai_data* data = (xibai_data*)malloc(sizeof(xibai_data));
+    xibai_data* data = sendBuff;//(xibai_data*)malloc(sizeof(xibai_data));
     if (!data)
     {
         Log(WINTUN_LOG_ERR, L"recv_packet_buffer_ptr init error!");
@@ -276,7 +276,6 @@ ReceivePackets(_Inout_ DWORD_PTR SessionPtr)
         if (Packet)
         {
             if (CheckPacket(Packet, PacketSize)) {
-                data->src_target.addr.S_un.S_addr = *(u_long*)(Packet + 12);
                 data->src_target.port.S_un.S_port = *(short*)(Packet + 20);
                 data->dst_target.addr.S_un.S_addr = *(u_long*)(Packet + 16);
                 data->dst_target.port.S_un.S_port = *(short*)(Packet + 22);
@@ -425,7 +424,7 @@ SendPackets(_Inout_ DWORD_PTR SessionPtr)
                 Log(WINTUN_LOG_INFO, L"this is a init");
                 continue;
             }
-            if (len == 5 && *(char*)data == 'h' && *(char*)data+1 == 'e' && *(char*)data+2 == 'a')
+            if (len == 20 && data->flag == 0)
             {
                 Log(WINTUN_LOG_INFO, L"this is a heart");
                 continue;
@@ -654,13 +653,13 @@ int __cdecl main(int argc, char** argv)
     }
     else
     {
-        server_ip = (wchar_t*)malloc(convertResult+2);
+        server_ip = (wchar_t*)malloc((convertResult + 1) * 2);
         if (!server_ip)
         {
             xibai_exit(3, NULL, Adapter, Wintun);
             return LogError(L"server_ip's buff create failed\n", GetLastError());
         }
-        memset(server_ip, 0, (convertResult + 1)*2);
+        memset(server_ip, 0, (convertResult + 1) * 2);
         convertResult = MultiByteToWideChar(CP_UTF8, 0, tmp_ip, (int)strlen(tmp_ip), server_ip, convertResult);
         if (convertResult <= 0)
         {
@@ -719,8 +718,13 @@ int __cdecl main(int argc, char** argv)
         //FreeLibrary(Wintun);
         return LogError(L"timeout options failed\n", WSAGetLastError());
     }
-    Log(WINTUN_LOG_INFO, L"Initializing connection done");
     Log(WINTUN_LOG_INFO, L"create conncetion's buffer");
+    if (!recvBuff || !sendBuff)
+    {
+        xibai_exit(4, server_socket, Adapter, Wintun);
+        return LogError(L"conncetion's buffer create failed with error: %d\n", WSAGetLastError());
+    }
+    Log(WINTUN_LOG_INFO, L"Initializing connection done");
 
     recvAddr[0].sin_family = AF_INET;
     recvAddr[0].sin_port = htons(50001);
@@ -736,8 +740,8 @@ int __cdecl main(int argc, char** argv)
     recvAddr[2].sin_addr.s_addr = sockaddr_ipv4->sin_addr.S_un.S_addr;
     memcpy(sendBuff, "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00", 20);
     Log(WINTUN_LOG_INFO, L"try connect server...");
-    if (-1 == sendto(server_socket, (char*)sendBuff, 20, NULL, (sockaddr*)recvAddr, sizeof(recvAddr))){
-        xibai_exit(4, server_socket, Adapter, Wintun);
+    while (-1 == sendto(server_socket, (char*)sendBuff, 20, NULL, (sockaddr*)recvAddr, sizeof(recvAddr))){
+        //xibai_exit(4, server_socket, Adapter, Wintun);
         //WSACleanup();
         //closesocket(server_socket);
         //WintunCloseAdapter(Adapter);
@@ -746,11 +750,16 @@ int __cdecl main(int argc, char** argv)
         //CloseHandle(QuitEvent);
         //    cleanupWintun:
         //FreeLibrary(Wintun);
-        return LogError(L"sendto failed with error: %d\n", WSAGetLastError());
+        LogError(L"sendto failed with error: %d\n", WSAGetLastError());
     }
-    int len = recvfrom(server_socket, (char*)recvBuff, 1500, NULL, (sockaddr*)recvAddr+1, &sock_len);
-    if (len == -1) {
-        xibai_exit(4, server_socket, Adapter, Wintun);
+    int count = 10;
+    while (count)
+    {
+        int len = recvfrom(server_socket, (char*)recvBuff, 1500, NULL, (sockaddr*)recvAddr + 1, &sock_len);
+        if (len != -1) {
+            break;
+        }
+        //xibai_exit(4, server_socket, Adapter, Wintun);
         //WSACleanup();
         //closesocket(server_socket);
         //WintunCloseAdapter(Adapter);
@@ -759,7 +768,11 @@ int __cdecl main(int argc, char** argv)
         //CloseHandle(QuitEvent);
         //    cleanupWintun:
         //FreeLibrary(Wintun);
-        return LogError(L"recvfrom error: %d\n", WSAGetLastError());
+        LogError(L"recvfrom error: %d\n", WSAGetLastError()); count--;
+    }
+    if (!count)
+    {
+        xibai_exit(4, server_socket, Adapter, Wintun);
     }
     if (*(char*)recvBuff < 1 || *(char*)recvBuff > 9)  // || recvAddr.sin_port != htons(50001)
     {
@@ -803,8 +816,9 @@ int __cdecl main(int argc, char** argv)
 
         LogError(L"Failed to set IP address", LastError);
         return LastError;
-    }if (-1 == sendto(server_socket, "success", 8, NULL, (sockaddr*)&recvAddr+1, sizeof(recvAddr))) {
-        xibai_exit(4, server_socket, Adapter, Wintun);
+    }
+    while(-1 == sendto(server_socket, "success", 8, NULL, (sockaddr*)&recvAddr+1, sizeof(recvAddr))) {
+        //xibai_exit(4, server_socket, Adapter, Wintun);
         //WSACleanup();
         //closesocket(server_socket);
         //WintunCloseAdapter(Adapter);
@@ -813,10 +827,11 @@ int __cdecl main(int argc, char** argv)
         //CloseHandle(QuitEvent);
         //    cleanupWintun:
         //FreeLibrary(Wintun);
-        return LogError(L"sendto failed with error: %d\n", WSAGetLastError());
+        LogError(L"sendto failed with error: %d\n", WSAGetLastError());
     }
     Log(WINTUN_LOG_INFO, L"配置成功");
 
+    // 准备接管网卡数据
     WINTUN_SESSION_HANDLE Session = WintunStartSession(Adapter, 0x400000);
     if (!Session)
     {
