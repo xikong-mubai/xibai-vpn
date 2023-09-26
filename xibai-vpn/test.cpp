@@ -313,7 +313,7 @@ ReceivePackets(_Inout_ DWORD_PTR SessionPtr)
                     len = sendto(server_socket, (char*)data, 1472, NULL, (sockaddr*)recvAddr, sizeof(recvAddr));
                     if (len != -1) {
                         PrintPacket(Packet, PacketSize);
-                        data->S_num.s_b2 += 1;
+                        data->S_num.s_b2 = 1;
                         memcpy(data->data, Packet+1452, PacketSize-1452);
                         len = sendto(server_socket, (char*)data, PacketSize - 1452 + 20, NULL, (sockaddr*)recvAddr, sizeof(recvAddr));
                         if (len != -1) {
@@ -376,7 +376,8 @@ static DWORD WINAPI
 SendPackets(_Inout_ DWORD_PTR SessionPtr)
 {
     WINTUN_SESSION_HANDLE Session = (WINTUN_SESSION_HANDLE)SessionPtr;
-    xibai_data* data = (xibai_data*)malloc(sizeof(xibai_data));
+
+    xibai_data* data = recvBuff;// (xibai_data*)malloc(sizeof(xibai_data));
     if (!data)
     {
         Log(WINTUN_LOG_ERR, L"send_packet_buffer_ptr init error!");
@@ -385,9 +386,10 @@ SendPackets(_Inout_ DWORD_PTR SessionPtr)
         return LastError;
     }
     int len = 0;
+    BYTE* Packet;
     while (!HaveQuit)
     {
-        len = recvfrom(server_socket, (char*)data, 1472, NULL, (sockaddr*)recvAddr, &sock_len);
+        len = recvfrom(server_socket, (char*)data, 1472, NULL, NULL, NULL);//(sockaddr*)recvAddr, &sock_len);
         if (len == -1) {
             Log(WINTUN_LOG_ERR, L"recv data failed");
             continue;
@@ -429,37 +431,54 @@ SendPackets(_Inout_ DWORD_PTR SessionPtr)
                 Log(WINTUN_LOG_INFO, L"this is a heart");
                 continue;
             }
-            BYTE* Packet = WintunAllocateSendPacket(Session, data->len);
-            if (Packet)
+            if (data->len > 1452)
             {
-                memset(Packet, 0, data->len);
-                if (data->len > 1452)
+                while (!packet_list[data->S_num.s_b1].packet_data)
                 {
-                    //MakeICMP(Packet);
-                    packet_list[data->S_num.s_b1].flag += 1;
-                    packet_list[data->S_num.s_b1].packet_data = Packet;
-                    if (data->S_num.s_b2 == 0)
+                    packet_list[data->S_num.s_b1].packet_data = WintunAllocateSendPacket(Session, data->len);
+                    if (!packet_list[data->S_num.s_b1].packet_data)
                     {
-                        memcpy(Packet, data->data, 1452);
+                        if (GetLastError() != ERROR_BUFFER_OVERFLOW)
+                            return LogLastError(L"sendPacket create failed  11");
+                        else {
+                            switch (WaitForSingleObject(QuitEvent, 1000 /* 1 second */))
+                            {
+                            case WAIT_TIMEOUT:
+                            case WAIT_ABANDONED:
+                            case WAIT_OBJECT_0:
+                                return ERROR_SUCCESS;
+                            case WAIT_FAILED:
+                                return LogLastError(L"sendPacket create failed  22");
+                            }
+                        }
                     }
-                    else
-                    {
-                        memcpy(Packet + 1452, data->data, data->len - 1452);
+                    else {
+                        memset(packet_list[data->S_num.s_b1].packet_data, 0, data->len);
                     }
-                    if (packet_list[data->S_num.s_b1].flag == 2)
-                    {
-                        PrintPacket(Packet, data->len);
-                        WintunSendPacket(Session, Packet);
-                        packet_list[data->S_num.s_b1].flag = 0;
-                        packet_list[data->S_num.s_b1].packet_data = NULL;
-                    }
-                    //len = recvfrom(server_socket, (char*)data, 0x10000, NULL, (sockaddr*)&recvAddr, &sock_len);
-                    //if (len == -1) {
-                    //    Log(WINTUN_LOG_ERR, L"recv data failed");
-                    //    continue;
-                    //}
                 }
-                else {
+                Packet = packet_list[data->S_num.s_b1].packet_data;
+                packet_list[data->S_num.s_b1].flag += 1;
+                if (data->S_num.s_b2 == 0)
+                {
+                    memcpy(Packet, data->data, 1452);
+                }
+                else
+                {
+                    memcpy(Packet + 1452, data->data, data->len - 1452);
+                }
+                if (packet_list[data->S_num.s_b1].flag == 2)
+                {
+                    PrintPacket(Packet, data->len);
+                    WintunSendPacket(Session, Packet);
+                    packet_list[data->S_num.s_b1].flag = 0;
+                    packet_list[data->S_num.s_b1].packet_data = NULL;
+                }
+            }
+            else
+            {
+                Packet = WintunAllocateSendPacket(Session, data->len);
+                if (Packet)
+                {
                     //MakeICMP(Packet);
                     memcpy(Packet, data->data, data->len);
                     PrintPacket(Packet, data->len);
@@ -469,21 +488,23 @@ SendPackets(_Inout_ DWORD_PTR SessionPtr)
                     //    continue;
                     //}
                     WintunSendPacket(Session, Packet);
+                    memset(Packet, 0, data->len);
                 }
-
-            }
-            else if (GetLastError() != ERROR_BUFFER_OVERFLOW)
-                return LogLastError(L"sendPacket create failed");
-            else {
-                switch (WaitForSingleObject(QuitEvent, 1000 /* 1 second */))
-                {
-                case WAIT_ABANDONED:
-                case WAIT_OBJECT_0:
-                    return ERROR_SUCCESS;
+                else if (GetLastError() != ERROR_BUFFER_OVERFLOW)
+                    return LogLastError(L"sendPacket create failed  11");
+                else {
+                    switch (WaitForSingleObject(QuitEvent, 1000 /* 1 second */))
+                    {
+                    case WAIT_TIMEOUT:
+                    case WAIT_ABANDONED:
+                    case WAIT_OBJECT_0:
+                        return ERROR_SUCCESS;
+                    case WAIT_FAILED:
+                        return LogLastError(L"sendPacket create failed  22");
+                    }
                 }
             }
         }
-
     }
     return ERROR_SUCCESS;
 }
@@ -755,7 +776,7 @@ int __cdecl main(int argc, char** argv)
     int count = 10;
     while (count)
     {
-        int len = recvfrom(server_socket, (char*)recvBuff, 1500, NULL, (sockaddr*)recvAddr + 1, &sock_len);
+        int len = recvfrom(server_socket, (char*)recvBuff, 1500, NULL, (sockaddr*)recvAddr, &sock_len);
         if (len != -1) {
             break;
         }
@@ -817,7 +838,7 @@ int __cdecl main(int argc, char** argv)
         LogError(L"Failed to set IP address", LastError);
         return LastError;
     }
-    while(-1 == sendto(server_socket, "success", 8, NULL, (sockaddr*)&recvAddr+1, sizeof(recvAddr))) {
+    while (-1 == sendto(server_socket, "success", 8, NULL, (sockaddr*)&recvAddr + 1, sizeof(recvAddr))) {
         //xibai_exit(4, server_socket, Adapter, Wintun);
         //WSACleanup();
         //closesocket(server_socket);
