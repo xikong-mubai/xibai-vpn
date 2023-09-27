@@ -15,7 +15,7 @@
 #include "wintun.h"
 
 SOCKET server_socket;
-sockaddr_in recvAddr[3];
+sockaddr_in recvAddr;
 int sock_len = sizeof(sockaddr);
 
 #pragma pack(1)

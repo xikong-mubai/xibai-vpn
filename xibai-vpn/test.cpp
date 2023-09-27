@@ -310,12 +310,12 @@ ReceivePackets(_Inout_ DWORD_PTR SessionPtr)
                 else if (PacketSize>1452)
                 {
                     memcpy(data->data, Packet, 1452);
-                    len = sendto(server_socket, (char*)data, 1472, NULL, (sockaddr*)recvAddr, sizeof(recvAddr));
+                    len = sendto(server_socket, (char*)data, 1472, NULL, (sockaddr*)&recvAddr, sizeof(recvAddr));
                     if (len != -1) {
                         PrintPacket(Packet, PacketSize);
                         data->S_num.s_b2 = 1;
                         memcpy(data->data, Packet+1452, PacketSize-1452);
-                        len = sendto(server_socket, (char*)data, PacketSize - 1452 + 20, NULL, (sockaddr*)recvAddr, sizeof(recvAddr));
+                        len = sendto(server_socket, (char*)data, PacketSize - 1452 + 20, NULL, (sockaddr*)&recvAddr, sizeof(recvAddr));
                         if (len != -1) {
                             PrintPacket(Packet, PacketSize);
                             data->S_num.s_b1 += 1;
@@ -336,7 +336,7 @@ ReceivePackets(_Inout_ DWORD_PTR SessionPtr)
                 }
                 else {
                     memcpy(data->data, Packet, PacketSize);
-                    len = sendto(server_socket, (char*)data, PacketSize + 20, NULL, (sockaddr*)recvAddr, sizeof(recvAddr));
+                    len = sendto(server_socket, (char*)data, PacketSize + 20, NULL, (sockaddr*)&recvAddr, sizeof(recvAddr));
                     if (len != -1) {
                         PrintPacket(Packet, PacketSize);
                         data->S_num.s_b1 += 1;
@@ -468,7 +468,7 @@ SendPackets(_Inout_ DWORD_PTR SessionPtr)
                 }
                 if (packet_list[data->S_num.s_b1].flag == 2)
                 {
-                    PrintPacket(Packet, data->len);
+                    //PrintPacket(Packet, data->len);
                     WintunSendPacket(Session, Packet);
                     packet_list[data->S_num.s_b1].flag = 0;
                     packet_list[data->S_num.s_b1].packet_data = NULL;
@@ -481,14 +481,13 @@ SendPackets(_Inout_ DWORD_PTR SessionPtr)
                 {
                     //MakeICMP(Packet);
                     memcpy(Packet, data->data, data->len);
-                    PrintPacket(Packet, data->len);
+                    //PrintPacket(Packet, data->len);
                     //len = recvfrom(server_socket, (char*)data, 0x10000, NULL, (sockaddr*)&recvAddr, &sock_len);
                     //if (len == -1) {
                     //    Log(WINTUN_LOG_ERR, L"recv data failed");
                     //    continue;
                     //}
                     WintunSendPacket(Session, Packet);
-                    memset(Packet, 0, data->len);
                 }
                 else if (GetLastError() != ERROR_BUFFER_OVERFLOW)
                     return LogLastError(L"sendPacket create failed  11");
@@ -523,7 +522,7 @@ Heart(_Inout_ xibai_data* sendBuff) {
     int len = 0;
     while (!HaveQuit)
     {
-        len = sendto(server_socket, (char*)buff, 20, NULL, (sockaddr*)recvAddr + 2, sizeof(recvAddr));
+        len = sendto(server_socket, (char*)buff, 20, NULL, (sockaddr*)&recvAddr, sizeof(recvAddr));
         if (len == -1) {
             Log(WINTUN_LOG_ERR, L"send heart data failed");
             continue;
@@ -747,21 +746,16 @@ int __cdecl main(int argc, char** argv)
     }
     Log(WINTUN_LOG_INFO, L"Initializing connection done");
 
-    recvAddr[0].sin_family = AF_INET;
-    recvAddr[0].sin_port = htons(50001);
+    recvAddr.sin_family = AF_INET;
+    recvAddr.sin_port = htons(50001);
     //RecvAddr.sin_addr.s_addr = inet_addr("255.255.255.254");
-    recvAddr[0].sin_addr.s_addr = sockaddr_ipv4->sin_addr.S_un.S_addr;
-    recvAddr[1].sin_family = AF_INET;
-    recvAddr[1].sin_port = htons(50002);
-    //RecvAddr.sin_addr.s_addr = inet_addr("255.255.255.254");
-    recvAddr[1].sin_addr.s_addr = sockaddr_ipv4->sin_addr.S_un.S_addr;
-    recvAddr[2].sin_family = AF_INET;
-    recvAddr[2].sin_port = htons(50003);
-    //RecvAddr.sin_addr.s_addr = inet_addr("255.255.255.254");
-    recvAddr[2].sin_addr.s_addr = sockaddr_ipv4->sin_addr.S_un.S_addr;
-    memcpy(sendBuff, "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00", 20);
+    recvAddr.sin_addr.s_addr = sockaddr_ipv4->sin_addr.S_un.S_addr;
+
+    //memcpy(sendBuff, "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00", 20);
+    sendBuff->flag = '\x01';
+    sendBuff->src_target.addr.S_un.S_addr = 0;
     Log(WINTUN_LOG_INFO, L"try connect server...");
-    while (-1 == sendto(server_socket, (char*)sendBuff, 20, NULL, (sockaddr*)recvAddr, sizeof(recvAddr))){
+    while (-1 == sendto(server_socket, (char*)sendBuff, 20, NULL, (sockaddr*)&recvAddr, sizeof(recvAddr))){
         //xibai_exit(4, server_socket, Adapter, Wintun);
         //WSACleanup();
         //closesocket(server_socket);
@@ -776,7 +770,7 @@ int __cdecl main(int argc, char** argv)
     int count = 10;
     while (count)
     {
-        int len = recvfrom(server_socket, (char*)recvBuff, 1500, NULL, (sockaddr*)recvAddr, &sock_len);
+        int len = recvfrom(server_socket, (char*)recvBuff, 1500, NULL, (sockaddr*)&recvAddr, &sock_len);
         if (len != -1) {
             break;
         }
@@ -819,6 +813,8 @@ int __cdecl main(int argc, char** argv)
     AddressRow.Address.Ipv4.sin_family = AF_INET;
     AddressRow.Address.Ipv4.sin_addr.S_un.S_addr = htonl((192 << 24) | (168 << 16) | (222 << 8) | (*(char*)recvBuff) << 0); /* 192.168.222.client */
     sendBuff->src_target.addr.S_un.S_addr = AddressRow.Address.Ipv4.sin_addr.S_un.S_addr;
+    sendBuff->flag = '\x01';
+    memcpy(sendBuff->data, "success", 7);
     //AddressRow.Address.Ipv4.sin_addr.S_un.S_addr = sockaddr_ipv4->sin_addr.S_un.S_addr; /* 10.6.7.7 */
     AddressRow.OnLinkPrefixLength = 24; /* This is a /24 network */
     AddressRow.DadState = IpDadStatePreferred;
@@ -838,7 +834,7 @@ int __cdecl main(int argc, char** argv)
         LogError(L"Failed to set IP address", LastError);
         return LastError;
     }
-    while (-1 == sendto(server_socket, "success", 8, NULL, (sockaddr*)&recvAddr + 1, sizeof(recvAddr))) {
+    while (-1 == sendto(server_socket, (char*)sendBuff, 27, NULL, (sockaddr*)&recvAddr, sizeof(recvAddr))) {
         //xibai_exit(4, server_socket, Adapter, Wintun);
         //WSACleanup();
         //closesocket(server_socket);
