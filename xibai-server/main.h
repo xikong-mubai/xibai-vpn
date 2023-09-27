@@ -122,11 +122,13 @@ struct xibai_data
 struct xibai_ready
 {
     sockaddr_in real_target;
-    socklen_t realt_len;
     char flag;
 };
 
 struct xibai_ready target_list[NUM] = { 0 };
-int fork_pid[NUM] = { 0 };
+int fork_pid[2048] = { 0 };
 int pipe_fd[10][2] = { 0 };
 int currentNum = 1;      //当前ip数量
+int server_fd = -1;
+sockaddr_in* RecvAddr = NULL;
+char message[1024] = "";
