@@ -30,23 +30,25 @@ char init_before(sockaddr_in* target_addr) {
 
 int heart(xibai_data* buff, sockaddr_in* target_addr) {
     unsigned int child_index = 0, flag = 0;
-    int parent = getppid();
     child_index = buff->src_target.addr.s_addr >> 24;
 
     if (target_list[child_index].flag == 0)
     {
+        memcpy(show_ip[0], inet_ntoa(target_addr->sin_addr), 16);
         printf("client_%d's reconnected.(%s:%d)\n", child_index,
-            inet_ntoa(target_addr->sin_addr),
+            show_ip[0],
             htons(target_addr->sin_port)
         ); target_list[child_index].flag = 1;
         flag |= 1;
     }
     if (target_list[child_index].real_target.sin_addr.s_addr != target_addr->sin_addr.s_addr || target_list[child_index].real_target.sin_port != target_addr->sin_port)
     {
+        memcpy(show_ip[0], inet_ntoa(target_list[child_index].real_target.sin_addr), 16);
+        memcpy(show_ip[1], inet_ntoa(target_addr->sin_addr), 16);
         printf("client_%d's ip:port changed.(%s:%d -> %s:%d)\n", child_index,
-            inet_ntoa(target_list[child_index].real_target.sin_addr),
+            show_ip[0],
             htons(target_list[child_index].real_target.sin_port),
-            inet_ntoa(target_addr->sin_addr),
+            show_ip[1],
             htons(target_addr->sin_port)
         );
         target_list[child_index].real_target = *target_addr;
@@ -54,14 +56,22 @@ int heart(xibai_data* buff, sockaddr_in* target_addr) {
     }
     if (flag != 0)
     {
-        printf("child heart send update sig...\n");
-        while (-1 == write(pipe_fd[child_index][1], target_list+child_index, sizeof(xibai_ready))) {
-            sprintf(message, "ipchange failed: %d - %s\n", errno, strerror(errno));
-            log(message);
-            printf("%s", message);
+        printf("parent send update sig...\n");
+        for (int i = 1; i < 2048; i++)
+        {
+            sprintf(path, "/proc/%d", fork_pid[i]);
+            if (stat(path, &sts) == -1 && errno == ENOENT) {
+                continue;
+            }
+            while (-1 == write(pipe_fd[child_index][1], target_list + child_index, sizeof(xibai_ready)))
+            {
+                sprintf(message, "pipe_%d write failed\n", child_index);
+                log(message);
+                printf("%s", message);
+            }
+            kill(fork_pid[i], child_index + 34);
         }
-        kill(parent, child_index + 34);
-        printf("child heart send update sig done.\n");
+        printf("parent send update sig done.\n");
     }
     printf("%d %d %s %d %d\n", 
         server_fd, 
@@ -70,12 +80,10 @@ int heart(xibai_data* buff, sockaddr_in* target_addr) {
         htons(target_addr->sin_port), 
         sizeof(sockaddr_in)
     );
-    while (-1 == sendto(server_fd, buff, 20, 0, (sockaddr*)target_addr, (socklen_t)sizeof(sockaddr_in))) {
-        
+    if (-1 == sendto(server_fd, buff, 20, 0, (sockaddr*)target_addr, (socklen_t)sizeof(sockaddr_in))) {
         sprintf(message, "heart message send failed: %d - %s\n", errno, strerror(errno));
         log(message);
         printf("%s", message);
-        exit(0);
     }
 }
 
@@ -87,6 +95,10 @@ void stop(int sign) {
     //        kill(fork_pid[i],SIGQUIT);
     //    }
     //}
+    if (server_fd != -1)
+    {
+        close(server_fd);
+    }
     fclose(log_fp);
     exit(0);
 }
@@ -97,26 +109,6 @@ void update(int sign) {
         sprintf(message, "pipe_%d read failed: %d - %s\n", tmp_sign, errno, strerror(errno));
         log(message);
         printf("%s", message);
-    }
-    if (getpid() == fork_pid[0])
-    {
-        printf("parent send update sig...\n");
-        for (int i = 1; i < 2048; i++)
-        {
-            struct stat sts = { 0 };
-            if (stat("/proc/<pid>", &sts) == -1 && errno == ENOENT) {
-                // process doesn't exist
-            }
-
-            while (-1 == write(pipe_fd[tmp_sign][1], target_list + tmp_sign, sizeof(xibai_ready)))
-            {
-                sprintf(message, "pipe_%d write failed\n", tmp_sign);
-                log(message);
-                printf("%s", message);
-            }
-            kill(fork_pid[i], sign);
-        }
-        printf("parent send update sig done.\n");
     }
 }
 
@@ -183,78 +175,97 @@ int control(xibai_data* buff,sockaddr_in* target_addr,int len) {
                 return -3;
             }
         }
-
-        return num;
         break;
     case 2:         // data
-        udp_len = buff->len;
-        src_ip_index = (buff->src_target.addr.s_addr >> 24);
-        dst_ip_index = (buff->dst_target.addr.s_addr >> 24);
-        if (udp_len > 1500) {
-            char* message = (char*)malloc(1024);
-            sprintf(message, "client udp length is exception ( %d ) !!! maybe is error!!!", udp_len);
-            printf("%s\n", message);
-            log(message);
-            return -4;
-        }
-        else if (dst_ip_index >= NUM && dst_ip_index != 255)
+        do
         {
-            printf("unkown server, dst_ip: %s\n", inet_ntoa(buff->dst_target.addr));
-            return -5;
-        }
-        else if (dst_ip_index == 255)
+            pid = fork();
+        } while (pid == -1);
+        if (pid)
         {
-            for (int i = 1; i < NUM; i++)
+            fork_pid[currentNum] = pid;
+            currentNum++;
+            currentNum %= 2048;
+        }
+        else {
+            udp_len = buff->len;
+            src_ip_index = (buff->src_target.addr.s_addr >> 24);
+            dst_ip_index = (buff->dst_target.addr.s_addr >> 24);
+            if (udp_len > 1500) {
+                char* message = (char*)malloc(1024);
+                sprintf(message, "client udp length is exception ( %d ) !!! maybe is error!!!", udp_len);
+                printf("%s\n", message);
+                log(message);
+                return -4;
+            }
+            else if (dst_ip_index >= NUM && dst_ip_index != 255)
             {
-                target = target_list[i];
-                if (target.flag == 1)//&& target_addr.sin_addr.s_addr != target.real_target.sin_addr.s_addr)
+                printf("unkown server, dst_ip: %s\n", inet_ntoa(buff->dst_target.addr));
+                return -5;
+            }
+            else if (dst_ip_index == 255)
+            {
+                for (int i = 1; i < NUM; i++)
                 {
-                    if (i != src_ip_index)
+                    target = target_list[i];
+                    if (target.flag == 1)//&& target_addr.sin_addr.s_addr != target.real_target.sin_addr.s_addr)
                     {
-                        while (-1 == sendto(server_fd, buff, len, 0, (sockaddr*)&(target.real_target), ta_len))
+                        if (i != src_ip_index)
                         {
-                            sprintf(message, "send error(dst:%s): %d - %s\n", inet_ntoa(buff->dst_target.addr), errno, strerror(errno));
-                            log(message);
-                            printf("%s", message);
+                            while (-1 == sendto(server_fd, buff, len, 0, (sockaddr*)&(target.real_target), ta_len))
+                            {
+                                sprintf(message, "send error(dst:%s): %d - %s\n", inet_ntoa(buff->dst_target.addr), errno, strerror(errno));
+                                log(message);
+                                printf("%s", message);
+                            }
+                            memcpy(show_ip[0], inet_ntoa(buff->src_target.addr), 16);
+                            memcpy(show_ip[1], inet_ntoa(target_addr->sin_addr), 16);
+                            memcpy(show_ip[2], inet_ntoa(buff->dst_target.addr), 16);
+                            memcpy(show_ip[3], inet_ntoa(target.real_target.sin_addr), 16);
+                            printf("send %d bytes success: %s(%s:%d) -> %s(%s:%d)\n",
+                                len,
+                                show_ip[0],
+                                show_ip[1],
+                                ntohs(target_addr->sin_port),
+                                show_ip[2],
+                                show_ip[3],
+                                ntohs(target.real_target.sin_port)
+                            );
                         }
-                        printf("send %d bytes success: %s(%s:%d) -> %s(%s:%d)\n",
-                            len,
-                            inet_ntoa(buff->src_target.addr),
-                            inet_ntoa(target_addr->sin_addr),
-                            ntohs(target_addr->sin_port),
-                            inet_ntoa(buff->dst_target.addr),
-                            inet_ntoa(target.real_target.sin_addr),
-                            ntohs(target.real_target.sin_port)
-                        );
                     }
                 }
             }
-        }
-        else {
-            target = target_list[dst_ip_index];
-            if (target.flag == 1)
-            {
-                while (-1 == sendto(server_fd, buff, len, 0, (sockaddr*)&(target.real_target), ta_len))
+            else {
+                target = target_list[dst_ip_index];
+                if (target.flag == 1)
                 {
-                    sprintf(message, "send error(dst:%s): %d - %s\n", inet_ntoa(buff->dst_target.addr), errno, strerror(errno));
-                    log(message);
-                    printf("%s", message);
+                    while (-1 == sendto(server_fd, buff, len, 0, (sockaddr*)&(target.real_target), ta_len))
+                    {
+                        sprintf(message, "send error(dst:%s): %d - %s\n", inet_ntoa(buff->dst_target.addr), errno, strerror(errno));
+                        log(message);
+                        printf("%s", message);
+                    }
+                    memcpy(show_ip[0], inet_ntoa(buff->src_target.addr), 16);
+                    memcpy(show_ip[1], inet_ntoa(target_addr->sin_addr), 16);
+                    memcpy(show_ip[2], inet_ntoa(buff->dst_target.addr), 16);
+                    memcpy(show_ip[3], inet_ntoa(target.real_target.sin_addr), 16);
+                    printf("send %d bytes success: %s(%s:%d) -> %s(%s:%d)\n",
+                        len,
+                        show_ip[0],
+                        show_ip[1],
+                        ntohs(target_addr->sin_port),
+                        show_ip[2],
+                        show_ip[3],
+                        ntohs(target.real_target.sin_port)
+                    );
                 }
-                printf("send %d bytes success: %s(%s:%d) -> %s(%s:%d)\n",
-                    len,
-                    inet_ntoa(buff->src_target.addr),
-                    inet_ntoa(target_addr->sin_addr),
-                    ntohs(target_addr->sin_port),
-                    inet_ntoa(buff->dst_target.addr),
-                    inet_ntoa(target.real_target.sin_addr),
-                    ntohs(target.real_target.sin_port)
-                );
+                else
+                {
+                    printf("dst_ip: 192.168.222.%d not found\n", dst_ip_index);
+                    return -6;
+                }
             }
-            else
-            {
-                printf("dst_ip: 192.168.222.%d not found\n", dst_ip_index);
-                return -6;
-            }
+            exit(0);
         }
         break;
     case 3:         //exit
@@ -291,11 +302,11 @@ int main()
     printf("socket already created\n");
 
     // 绑定主服务监听
-    RecvAddr = (sockaddr_in*)malloc(sizeof(sockaddr_in));
-    RecvAddr->sin_family = AF_INET;
-    RecvAddr->sin_addr.s_addr = getIP();
-    RecvAddr->sin_port = htons(50001);
-    if (-1 == bind(server_fd, (sockaddr *)RecvAddr, sizeof(sockaddr_in)))
+    sockaddr_in RecvAddr = { 0 };
+    RecvAddr.sin_family = AF_INET;
+    RecvAddr.sin_addr.s_addr = getIP();
+    RecvAddr.sin_port = htons(50001);
+    if (-1 == bind(server_fd, (sockaddr *)&RecvAddr, sizeof(sockaddr_in)))
     {
         sprintf(message,"main socket bind error: %d - %s\n", errno, strerror(errno));
         log(message);
@@ -327,27 +338,9 @@ int main()
         else if (len < 1473 && len > 0) {
             printf("[%s]  ",get_stime());
             printf("recv %s:%d success: %d\n", inet_ntoa(target_addr.sin_addr),ntohs(target_addr.sin_port), len);
-            if (buff->flag == 1)
-            {
-                printf("recv client init message. Result: %d\n", control(buff, &target_addr, 0));
-                continue;
-            }
-            do
-            {
-                pid = fork();
-            } while (pid == -1);
-            if (!pid)
-            {
-                result = control(buff, &target_addr, len);
-                if (result != 0) {
-                    printf("WarningCode: %d\n", result);
-                }
-                exit(0);
-            }
-            else {
-                fork_pid[currentNum] = pid;
-                currentNum++;
-                currentNum %= 2048;
+            result = control(buff, &target_addr, len);
+            if (result != 0) {
+                printf("WarningCode: %d\n", result);
             }
         }
         else
