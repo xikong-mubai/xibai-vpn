@@ -9,14 +9,10 @@
 #include <ip2string.h>
 #include <winternl.h>
 #include <stdarg.h>
-
-#include "aes.h"
+#include <stdio.h>
+#include <stdlib.h>
 #include <locale.h>
 #include "wintun.h"
-//
-//#include<openssl/aes.h>
-//#include<openssl/rsa.h>
-//#include<openssl/pem.h>
 
 SOCKET server_socket;
 sockaddr_in recvAddr;
@@ -51,7 +47,7 @@ struct xibai_data
     unsigned char flag;
     struct { USHORT s_b1;UCHAR s_b2; } S_num;
     unsigned int len;
-    char data[1452];
+    unsigned char data[1452];
 } *recvBuff = (xibai_data*)malloc(sizeof(xibai_data)),
 *sendBuff = (xibai_data*)malloc(sizeof(xibai_data));
 

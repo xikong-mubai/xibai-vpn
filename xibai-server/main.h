@@ -127,7 +127,11 @@ struct xibai_ready
 };
 
 struct xibai_ready target_list[NUM] = { 0 };
-
+int fork_pid[2048] = { 0 };
+struct stat sts = { 0 };
+int pipe_fd[10][2] = { 0 };
+int currentNum = 1;      //当前ip数量
 int server_fd = -1;
 char message[1024] = "";
+char path[24] = "";
 char show_ip[4][16];

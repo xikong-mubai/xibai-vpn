@@ -280,48 +280,42 @@ ReceivePackets(_Inout_ DWORD_PTR SessionPtr)
                 data->dst_target.addr.S_un.S_addr = *(u_long*)(Packet + 16);
                 data->dst_target.port.S_un.S_port = *(short*)(Packet + 22);
                 data->len = PacketSize; data->S_num.s_b2 = 0;
-
-
-                uint8_t* blocks = NULL;
-                //aesEncryptCBC(blocks, key, block_num, iv);
-
-                //printf("加密密文：");
-                //for (int i = 0; i < block_num * 16; i++) {
-                //    printf("\\x%02x", blocks[i]);
-                //}
-                //printf("\n");
-
-                //aesDecryptCBC(blocks, key, block_num, iv);
-
-                //printf("解密明文：%s\n", blocks);
-                //free(blocks);
-
-
-
                 if (PacketSize > 1500)
                 {
                     Log(WINTUN_LOG_WARN, L"recv_packet_size so big!!!");
+                    //memcpy(data->data, Packet, 65515);
+                    //len = sendto(server_socket, (char*)data, 65536, NULL, (sockaddr*)&recvAddr, sizeof(recvAddr));
+                    //if (len != -1) {
+                    //    PrintPacket(Packet, PacketSize);
+                    //    memcpy(data->data, Packet + 65515, PacketSize - 65515);
+                    //    data->S_un.S_un_b.s_b2 += 1;
+                    //    len = sendto(server_socket, (char*)data, PacketSize - 65515 + 21, NULL, (sockaddr*)&recvAddr, sizeof(recvAddr));
+                    //    if (len != -1) {
+                    //        data->S_un.S_un_b.s_b1 += 1;
+                    //        PrintPacket(Packet, PacketSize);
+                    //    }
+                    //    else {
+                    //        Log(WINTUN_LOG_ERR, L"send data failed");
+                    //        DWORD LastError = GetLastError();
+                    //        LogError(L"Packet check failed", LastError);
+                    //    }
+                    //}
+                    //else
+                    //{
+                    //    Log(WINTUN_LOG_ERR, L"send data failed");
+                    //    DWORD LastError = GetLastError();
+                    //    LogError(L"Packet check failed", LastError);
+                    //}
                 }
-                //else if (PacketSize>1452)
-                else if (PacketSize > 1440)
+                else if (PacketSize>1452)
                 {
-
-                    int block_num = splitBlock((char*)Packet, &blocks, 1440);
-                    aesEncryptCBC(blocks, key, block_num, iv);
-                    memcpy(data->data, blocks, 1440);
-
-                    //memcpy(data->data, Packet, 1452);
-                    len = sendto(server_socket, (char*)data, 1460, NULL, (sockaddr*)&recvAddr, sizeof(recvAddr));
+                    memcpy(data->data, Packet, 1452);
+                    len = sendto(server_socket, (char*)data, 1472, NULL, (sockaddr*)&recvAddr, sizeof(recvAddr));
                     if (len != -1) {
                         PrintPacket(Packet, PacketSize);
                         data->S_num.s_b2 = 1;
-
-                        block_num = splitBlock((char*)Packet+1440, &blocks, PacketSize - 1440);
-                        aesEncryptCBC(blocks, key, block_num, iv);
-                        memcpy(data->data, blocks, block_num * 16);
-
-                        //memcpy(data->data, Packet+1452, PacketSize-1440);
-                        len = sendto(server_socket, (char*)data, block_num * 16 + 20, NULL, (sockaddr*)&recvAddr, sizeof(recvAddr));
+                        memcpy(data->data, Packet+1452, PacketSize-1452);
+                        len = sendto(server_socket, (char*)data, PacketSize - 1452 + 20, NULL, (sockaddr*)&recvAddr, sizeof(recvAddr));
                         if (len != -1) {
                             PrintPacket(Packet, PacketSize);
                             data->S_num.s_b1 += 1;
@@ -341,12 +335,8 @@ ReceivePackets(_Inout_ DWORD_PTR SessionPtr)
                     }
                 }
                 else {
-
-                    int block_num = splitBlock((char*)Packet, &blocks, PacketSize);
-                    aesEncryptCBC(blocks, key, block_num, iv);
-                    memcpy(data->data, blocks, block_num * 16);
-
-                    len = sendto(server_socket, (char*)data, block_num * 16 + 20, NULL, (sockaddr*)&recvAddr, sizeof(recvAddr));
+                    memcpy(data->data, Packet, PacketSize);
+                    len = sendto(server_socket, (char*)data, PacketSize + 20, NULL, (sockaddr*)&recvAddr, sizeof(recvAddr));
                     if (len != -1) {
                         PrintPacket(Packet, PacketSize);
                         data->S_num.s_b1 += 1;
@@ -402,10 +392,6 @@ SendPackets(_Inout_ DWORD_PTR SessionPtr)
         len = recvfrom(server_socket, (char*)data, 1472, NULL, NULL, NULL);//(sockaddr*)recvAddr, &sock_len);
         if (len == -1) {
             Log(WINTUN_LOG_ERR, L"recv data failed");
-            DWORD LastError = GetLastError();
-            LogError(L"Packet check failed_sys", LastError);
-            LastError = WSAGetLastError();
-            LogError(L"Packet check failed_WSA", LastError);
             continue;
         }
         if (len > 1472)
@@ -445,12 +431,7 @@ SendPackets(_Inout_ DWORD_PTR SessionPtr)
                 Log(WINTUN_LOG_INFO, L"this is a heart");
                 continue;
             }
-
-
-            uint8_t* blocks = NULL;
-
-            if (data->len > 1440)
-            //if (data->len > 1452)
+            if (data->len > 1452)
             {
                 while (!packet_list[data->S_num.s_b1].packet_data)
                 {
@@ -479,19 +460,11 @@ SendPackets(_Inout_ DWORD_PTR SessionPtr)
                 packet_list[data->S_num.s_b1].flag += 1;
                 if (data->S_num.s_b2 == 0)
                 {
-                    int block_num = splitBlock(data->data, &blocks, 1440);
-                    aesDecryptCBC(blocks, key, block_num, iv);
-                    memcpy(Packet, blocks, 1440);
-                    //memcpy(Packet, data->data, 1452);
-                
+                    memcpy(Packet, data->data, 1452);
                 }
                 else
                 {
-                    int block_num = splitBlock(data->data + 1440, &blocks, len - 20);
-                    aesDecryptCBC(blocks, key, block_num, iv);
-
-                    memcpy(Packet + 1440, blocks, data->len - 1440);
-                    //memcpy(Packet + 1452, data->data, data->len - 1452);
+                    memcpy(Packet + 1452, data->data, data->len - 1452);
                 }
                 if (packet_list[data->S_num.s_b1].flag == 2)
                 {
@@ -507,13 +480,7 @@ SendPackets(_Inout_ DWORD_PTR SessionPtr)
                 if (Packet)
                 {
                     //MakeICMP(Packet);
-
-                    uint8_t* blocks = NULL;
-                    int block_num = splitBlock(data->data, &blocks, len - 20);
-                    aesDecryptCBC(blocks, key, block_num, iv);
-
-
-                    memcpy(Packet, blocks, data->len);
+                    memcpy(Packet, data->data, data->len);
                     //PrintPacket(Packet, data->len);
                     //len = recvfrom(server_socket, (char*)data, 0x10000, NULL, (sockaddr*)&recvAddr, &sock_len);
                     //if (len == -1) {
