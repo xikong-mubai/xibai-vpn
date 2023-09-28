@@ -127,7 +127,6 @@ struct xibai_ready
 };
 
 struct xibai_ready target_list[NUM] = { 0 };
-
 int server_fd = -1;
-char message[1024] = "";
-char show_ip[4][16];
+char message[10240] = "";
+char show_ip[4][20];

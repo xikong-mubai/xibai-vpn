@@ -1,9 +1,9 @@
 ﻿#include "main.h"
 
 char init_before(sockaddr_in* target_addr) {
-    char init_message[3] = "\x00\x00", recv_message[10] = "";
+    char init_message[3] = "\x00\x00";
     int num = 0;
-    for (size_t i = 1; i < NUM; i++)
+    for (int i = 1; i < NUM; i++)
     {
         if (target_list[i].flag == 0)
         {
@@ -16,7 +16,7 @@ char init_before(sockaddr_in* target_addr) {
                 printf("    %s", message);
             }
             target_list[num].flag = 2;
-            return num;
+            return init_message[0];
         }
     }
     while (-1 == sendto(server_fd, "client's number is max!\n", 24, 0, (sockaddr*)target_addr, (socklen_t)sizeof(sockaddr_in))) {
@@ -25,7 +25,7 @@ char init_before(sockaddr_in* target_addr) {
         log(message);
         printf("    %s", message);
     }
-    return num;
+    return 0;
 }
 
 int heart(xibai_data* buff, sockaddr_in* target_addr) {
@@ -34,14 +34,15 @@ int heart(xibai_data* buff, sockaddr_in* target_addr) {
 
     if (target_list[child_index].flag == 0)
     {
-        memcpy(show_ip[0], inet_ntoa(target_addr->sin_addr), 16);
+        memcpy(show_ip[0], inet_ntoa(target_addr->sin_addr), 15);
         printf("    client_%d's reconnected.(%s:%d)\n", child_index,
             show_ip[0],
             htons(target_addr->sin_port)
         ); target_list[child_index].flag = 1;
         flag |= 1;
     }
-    if (target_list[child_index].real_target.sin_addr.s_addr != target_addr->sin_addr.s_addr || target_list[child_index].real_target.sin_port != target_addr->sin_port)
+    if (target_list[child_index].real_target.sin_addr.s_addr != target_addr->sin_addr.s_addr
+        || target_list[child_index].real_target.sin_port != target_addr->sin_port)
     {
         memcpy(show_ip[0], inet_ntoa(target_list[child_index].real_target.sin_addr), 15);
         memcpy(show_ip[1], inet_ntoa(target_addr->sin_addr), 15);
@@ -62,7 +63,7 @@ int heart(xibai_data* buff, sockaddr_in* target_addr) {
 }
 
 int control(xibai_data* buff,sockaddr_in* target_addr,int len) {
-    int udp_len = 0, src_ip_index = 0, dst_ip_index = 0, pid = -1;
+    int udp_len = 0, src_ip_index = 0, dst_ip_index = 0;
     socklen_t ta_len = sizeof(sockaddr_in); xibai_ready target = { 0 };
     unsigned int num = 0;
     switch (buff->flag)
@@ -130,7 +131,6 @@ int control(xibai_data* buff,sockaddr_in* target_addr,int len) {
             src_ip_index = (buff->src_target.addr.s_addr >> 24);
             dst_ip_index = (buff->dst_target.addr.s_addr >> 24);
             if (udp_len > 1500) {
-                char* message = (char*)malloc(1024);
                 sprintf(message, "client udp length is exception ( %d ) !!! maybe is error!!!", udp_len);
                 printf("    %s\n", message);
                 log(message);
@@ -156,10 +156,10 @@ int control(xibai_data* buff,sockaddr_in* target_addr,int len) {
                                 log(message);
                                 printf("    %s", message);
                             }
-                            memcpy(show_ip[0], inet_ntoa(buff->src_target.addr), 16);
-                            memcpy(show_ip[1], inet_ntoa(target_addr->sin_addr), 16);
-                            memcpy(show_ip[2], inet_ntoa(buff->dst_target.addr), 16);
-                            memcpy(show_ip[3], inet_ntoa(target.real_target.sin_addr), 16);
+                            memcpy(show_ip[0], inet_ntoa(buff->src_target.addr), 15);
+                            memcpy(show_ip[1], inet_ntoa(target_addr->sin_addr), 15);
+                            memcpy(show_ip[2], inet_ntoa(buff->dst_target.addr), 15);
+                            memcpy(show_ip[3], inet_ntoa(target.real_target.sin_addr), 15);
                             printf("    send %d bytes success: %s(%s:%d) -> %s(%s:%d)\n",
                                 len,
                                 show_ip[0],
@@ -214,10 +214,13 @@ int control(xibai_data* buff,sockaddr_in* target_addr,int len) {
 
 int main()
 {
+
     server_fd = socket(AF_INET, SOCK_DGRAM, 0);
     if (server_fd == -1)
     {
-        log("socket create error\n");
+        sprintf(message, "socket create error : %d - %s\n", errno, strerror(errno));
+        log(message);
+        printf("    %s", message);
         exit(0);
     }
     printf("socket already created\n");
@@ -245,12 +248,12 @@ int main()
     } while (!buff);
     printf("buffer already created\n");
     
-    int len = 0, pid = -1, result = 0;
+    int len = 0, result = 0;
     sockaddr_in target_addr = { 0 };
     socklen_t ta_len = sizeof(sockaddr_in);
     while (1) {
         //bzero((char*)buff, 1500);
-        len = recvfrom(server_fd, buff, 1472, 0, (sockaddr*)&target_addr, (socklen_t*)&ta_len);
+        len = recvfrom(server_fd, buff, sizeof(xibai_data), 0, (sockaddr*)&target_addr, (socklen_t*)&ta_len);
         if (len == -1) {
             sprintf(message, "recvfrom error: %d - %s\n", errno, strerror(errno));
             log(message);
@@ -266,7 +269,6 @@ int main()
         }
         else
         {
-            char* message = (char*)malloc(1024);
             sprintf(message, "vpn udp length is exception ( %d ) !!! maybe is error!!!", len);
             printf("    %s\n", message);
             log(message);
