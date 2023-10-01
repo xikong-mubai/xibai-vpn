@@ -281,7 +281,6 @@ ReceivePackets(_Inout_ DWORD_PTR SessionPtr)
                 data->dst_target.port.S_un.S_port = *(short*)(Packet + 22);
                 data->len = PacketSize; data->S_num.s_b2 = 0;
 
-
                 uint8_t* blocks = NULL;
                 //aesEncryptCBC(blocks, key, block_num, iv);
 
@@ -296,8 +295,6 @@ ReceivePackets(_Inout_ DWORD_PTR SessionPtr)
                 //printf("½âÃÜÃ÷ÎÄ£º%s\n", blocks);
                 //free(blocks);
 
-
-
                 if (PacketSize > 1500)
                 {
                     Log(WINTUN_LOG_WARN, L"recv_packet_size so big!!!");
@@ -305,7 +302,6 @@ ReceivePackets(_Inout_ DWORD_PTR SessionPtr)
                 //else if (PacketSize>1452)
                 else if (PacketSize > 1440)
                 {
-
                     int block_num = splitBlock((char*)Packet, &blocks, 1440);
                     aesEncryptCBC(blocks, key, block_num, iv);
                     memcpy(data->data, blocks, 1440);
@@ -330,18 +326,17 @@ ReceivePackets(_Inout_ DWORD_PTR SessionPtr)
                         {
                             Log(WINTUN_LOG_ERR, L"send data failed");
                             DWORD LastError = GetLastError();
-                            LogError(L"Packet check failed", LastError);
+                            LogError(L"send data failed", LastError);
                         }
                     }
                     else
                     {
                         Log(WINTUN_LOG_ERR, L"send data failed");
                         DWORD LastError = GetLastError();
-                        LogError(L"Packet check failed", LastError);
+                        LogError(L"send data failed", LastError);
                     }
                 }
                 else {
-
                     int block_num = splitBlock((char*)Packet, &blocks, PacketSize);
                     aesEncryptCBC(blocks, key, block_num, iv);
                     memcpy(data->data, blocks, block_num * 16);
@@ -355,7 +350,7 @@ ReceivePackets(_Inout_ DWORD_PTR SessionPtr)
                     {
                         Log(WINTUN_LOG_ERR, L"send data failed");
                         DWORD LastError = GetLastError();
-                        LogError(L"Packet check failed", LastError);
+                        LogError(L"send data failed", LastError);
                     }
                 }
             }
@@ -457,6 +452,7 @@ SendPackets(_Inout_ DWORD_PTR SessionPtr)
                     packet_list[data->S_num.s_b1].packet_data = WintunAllocateSendPacket(Session, data->len);
                     if (!packet_list[data->S_num.s_b1].packet_data)
                     {
+                        LogLastError(L"sendPacket create failed  12");
                         if (GetLastError() != ERROR_BUFFER_OVERFLOW)
                             return LogLastError(L"sendPacket create failed  11");
                         else {
@@ -487,7 +483,7 @@ SendPackets(_Inout_ DWORD_PTR SessionPtr)
                 }
                 else
                 {
-                    int block_num = splitBlock(data->data + 1440, &blocks, len - 20);
+                    int block_num = splitBlock(data->data, &blocks, len - 20);
                     aesDecryptCBC(blocks, key, block_num, iv);
 
                     memcpy(Packet + 1440, blocks, data->len - 1440);
